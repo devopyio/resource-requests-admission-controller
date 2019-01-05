@@ -58,11 +58,11 @@ func (rra *ResourceRequestsAdmission) HandleAdmission(req *v1beta1.AdmissionRequ
 		Allowed: true,
 	}
 	kind := req.Kind.Kind
-	if kind != deploymentKind || kind != statefulsetKind || kind != podKind {
+	if kind != deploymentKind && kind != statefulsetKind && kind != podKind {
 		return resp, nil
 	}
 
-	if req.Operation != v1beta1.Create || req.Operation != v1beta1.Update {
+	if req.Operation != v1beta1.Create && req.Operation != v1beta1.Update {
 		return resp, nil
 	}
 
@@ -131,7 +131,7 @@ func validatePodSpec(req *v1beta1.AdmissionRequest, podSpec corev1.PodSpec) *v1b
 				UID:     req.UID,
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: fmt.Sprintf("Error contianer %s requests.CPU: %s > 0", container.Name, container.Resources.Requests.Cpu()),
+					Message: fmt.Sprintf("Error container %s requests.CPU: %s > 0", container.Name, container.Resources.Requests.Cpu()),
 				},
 			}
 		}
@@ -141,7 +141,7 @@ func validatePodSpec(req *v1beta1.AdmissionRequest, podSpec corev1.PodSpec) *v1b
 				UID:     req.UID,
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: fmt.Sprintf("Error contianer %s requests.CPU: %s > 0", container.Name, container.Resources.Requests.Cpu()),
+					Message: fmt.Sprintf("Error container %s requests.Mem: %s > 0", container.Name, container.Resources.Requests.Cpu()),
 				},
 			}
 		}

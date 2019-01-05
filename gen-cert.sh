@@ -1,9 +1,9 @@
 #!/bin/bash
 title="resource-requests-controller"
 
-[ -z ${title} ] && service=resource-requests-controller
-[ -z ${title} ] && secret=resource-requests-controller
-[ -z ${title} ] && namespace=kube-system
+service=resource-requests-controller
+secret=resource-requests-controller
+namespace=kube-system
 
 csrName=${title}
 tmpdir=$(mktemp -d)
@@ -21,8 +21,7 @@ extendedKeyUsage = serverAuth
 subjectAltName = @alt_names
 [alt_names]
 DNS.1 = ${title}
-DNS.2 = ${title}.${title}
-DNS.3 = ${title}.${title}.svc
+DNS.2 = ${title}.${namespace}.svc
 EOF
 
 openssl genrsa -out ${tmpdir}/server-key.pem 2048

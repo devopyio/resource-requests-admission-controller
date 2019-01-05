@@ -51,7 +51,7 @@ func (acs *AdmissionControllerServer) ServeHTTP(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	log.WithField("resp", string(body)).Debug("handling response")
+	log.WithField("resp", string(responseInBytes)).Debug("handling response")
 
 	if _, err := w.Write(responseInBytes); err != nil {
 		log.WithError(err).Error("unable to write response")
