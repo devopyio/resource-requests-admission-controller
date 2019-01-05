@@ -1,12 +1,11 @@
 #!/bin/bash
-title="namespace-admission"
-kubectl create namespace namespace-admission || true
+title="resource-requests-controller"
 
-[ -z ${title} ] && service=sidecar-injector-webhook-svc
-[ -z ${title} ] && secret=sidecar-injector-webhook-certs
-[ -z ${title} ] && namespace=default
+[ -z ${title} ] && service=resource-requests-controller
+[ -z ${title} ] && secret=resource-requests-controller
+[ -z ${title} ] && namespace=kube-system
 
-csrName=${title}.${title}
+csrName=${title}
 tmpdir=$(mktemp -d)
 echo "creating certs in tmpdir ${tmpdir} "
 
@@ -74,8 +73,7 @@ echo ${serverCert} | openssl base64 -d -A -out ${tmpdir}/server-cert.pem
 
 
 # create the secret with CA cert and server cert/key
-kubectl create secret generic ${title}-certs \
+kubectl create secret generic ${title} \
         --from-file=key.pem=${tmpdir}/server-key.pem \
         --from-file=cert.pem=${tmpdir}/server-cert.pem \
-        --dry-run -o yaml |
-    kubectl -n ${title} apply -f -
+        --dry-run -o yaml | kubectl apply -f -

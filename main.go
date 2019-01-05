@@ -28,14 +28,14 @@ func main() {
 	keyFile := app.Flag("tls-private-key-file", "").Envar("TLS_KEY_FILE").Required().String()
 
 	excludeNs := app.Flag("exclude-namespaces", "Bypasses resources in namespaces.Example: kube-system,default").Envar("EXCLUDE_NAMESPACES").Strings()
-	excludeNames := app.Flag("exclude-names", "Bypasses resources with given name and namespace. Example: pod-name.kube-system").Envar("EXCLUDE_NAME_NAMESPACES").Strings()
+	excludeNames := app.Flag("exclude-names", "Bypasses resources with given name and namespace. Example: pod-name.kube-system").Envar("EXCLUDE_NAMES").Strings()
 
-	logLevel := app.Flag("log.level", "Log level.").
+	logLevel := app.Flag("log.level", "Log level.").Envar("LOG_LEVEL").
 		Default("info").Enum("error", "warn", "info", "debug")
-	logFormat := app.Flag("log.format", "Log format.").
+	logFormat := app.Flag("log.format", "Log format.").Envar("LOG_FORMAT").
 		Default("text").Enum("text", "json")
 
-	addr := app.Flag("addr", "Server address which will receive AdmissionReview requests.").Default("0.0.0.0:8080").String()
+	addr := app.Flag("addr", "Server address which will receive AdmissionReview requests.").Envar("ADDR").Default("0.0.0.0:8443").String()
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	switch strings.ToLower(*logLevel) {
@@ -101,6 +101,7 @@ func main() {
 		},
 	}
 
+	log.Infof("app started, exluding namespaces: %q, names: %q, listening on: %s ", *excludeNs, *excludeNames, *addr)
 	if err := server.ListenAndServeTLS("", ""); err != nil {
 		log.WithError(err).Fatal("unable to start http server")
 	}
