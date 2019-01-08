@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    run: shell
+  name: shell
+  namespace: mynamespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: shell
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        run: shell
+    spec:
+      containers:
+      - image: ubuntu
+        name: shell
+        resources:
+          requests:
+            cpu: 1
+            memory: 1024
+status: {}

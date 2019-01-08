@@ -1,12 +1,17 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
+	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/alecthomas/kingpin"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	ver "github.com/prometheus/common/version"
 	log "github.com/sirupsen/logrus"
@@ -19,23 +24,23 @@ var (
 func main() {
 	ver.Version = version
 
-	app := kingpin.New("resource-requests-admission-controller", "Validates Statefulset,Deployment,Pod resource requests.")
+	app := kingpin.New("resource-requests-admission-controller", "Validates Statefulset,Deployment,Daemoneset,Pod resource requests and limits")
 
 	app.Version(ver.Print("resource-requests-admission-controller"))
 	app.HelpFlag.Short('h')
 
 	certFile := app.Flag("tls-cert-file", "").Envar("TLS_CERT_FILE").Required().String()
 	keyFile := app.Flag("tls-private-key-file", "").Envar("TLS_KEY_FILE").Required().String()
-
-	excludeNs := app.Flag("exclude-namespaces", "Bypasses resources in namespaces.Example: kube-system,default").Envar("EXCLUDE_NAMESPACES").Strings()
-	excludeNames := app.Flag("exclude-names", "Bypasses resources with given name and namespace. Example: pod-name.kube-system").Envar("EXCLUDE_NAMES").Strings()
-
+	configFile := app.Flag("config-file", "File path to the config").Envar("CONFIG_FILE").Required().String()
+	refreshInterval := app.Flag("refresh-interval", "Refresh interval in if no file change happens.").Envar("CONFIG_FILE").Default("5m").Duration()
 	logLevel := app.Flag("log.level", "Log level.").Envar("LOG_LEVEL").
 		Default("info").Enum("error", "warn", "info", "debug")
 	logFormat := app.Flag("log.format", "Log format.").Envar("LOG_FORMAT").
 		Default("text").Enum("text", "json")
 
 	addr := app.Flag("addr", "Server address which will receive AdmissionReview requests.").Envar("ADDR").Default("0.0.0.0:8443").String()
+	opsAddr := app.Flag("ops-addr", "Server address which will serve prometheus metrics.").Envar("PROM_ADDR").Default("0.0.0.0:8090").String()
+
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	switch strings.ToLower(*logLevel) {
@@ -57,52 +62,73 @@ func main() {
 	}
 	log.SetOutput(os.Stdout)
 
-	excludeNsMap := make(map[string]struct{})
-	for _, ns := range *excludeNs {
-		excludeNsMap[ns] = struct{}{}
+	configer, err := NewConfiger(*configFile, *refreshInterval)
+	if err != nil {
+		log.WithError(err).Fatal("unable to load config file: %s", *configFile)
 	}
+	defer configer.Close()
 
-	excludeNameMap := make(map[NameNamespace]struct{})
-	for _, nameNs := range *excludeNames {
-		resp := strings.Split(nameNs, ".")
-		if len(resp) != 2 {
-			log.Fatalf("could not parse excluded resource name: %s, resource name must include namespace. Example: pod-name.namespace", nameNs)
-		}
-
-		excludeNameMap[NameNamespace{
-			Name:      resp[0],
-			Namespace: resp[1],
-		}] = struct{}{}
-	}
-
-	rra := &ResourceRequestsAdmission{
-		ExcludedNames:      excludeNameMap,
-		ExcludedNamespaces: excludeNsMap,
-	}
+	rra := New(configer)
 
 	cert, err := tls.LoadX509KeyPair(*certFile, *keyFile)
 	if err != nil {
 		log.WithError(err).Fatal("unable to load certificates")
 	}
 
-	mux := http.NewServeMux()
+	opsServer := http.Server{
+		Addr:    fmt.Sprintf(*opsAddr),
+		Handler: promhttp.Handler(),
+	}
+	go func() {
+		opsErr := opsServer.ListenAndServe()
+		switch opsErr {
+		case http.ErrServerClosed:
+			log.WithError(opsErr).Warn("ops server shutdown")
+		default:
+			log.WithError(opsErr).Panic("unable to start ops http server")
+		}
+	}()
+	defer func() {
+		err := opsServer.Shutdown(context.Background())
+		if err != nil {
+			log.WithError(err).Error("unable to shutdown ops http server")
+		}
+	}()
 
-	mux.Handle("/metrics", promhttp.Handler())
-	mux.Handle("/", &AdmissionControllerServer{
-		AdmissionController: rra,
-		Decoder:             codecs.UniversalDeserializer(),
-	})
-
+	log.Infof("app started,listening on: %s, prometheus on: %s", *addr, *opsAddr)
 	server := &http.Server{
-		Handler: mux,
-		Addr:    *addr,
+		Handler: prometheus.InstrumentHandler("admission", &AdmissionControllerServer{
+			AdmissionController: rra,
+			Decoder:             codecs.UniversalDeserializer(),
+		}),
+		Addr: *addr,
 		TLSConfig: &tls.Config{
 			Certificates: []tls.Certificate{cert},
 		},
 	}
+	go func() {
+		err := server.ListenAndServeTLS("", "")
+		switch err {
+		case http.ErrServerClosed:
+			log.WithError(err).Warn("ops server shutdown")
+		default:
+			log.WithError(err).Panic("unable to start http server")
+		}
+	}()
 
-	log.Infof("app started, exluding namespaces: %q, names: %q, listening on: %s ", *excludeNs, *excludeNames, *addr)
-	if err := server.ListenAndServeTLS("", ""); err != nil {
-		log.WithError(err).Fatal("unable to start http server")
-	}
+	defer func() {
+		err := server.Shutdown(context.Background())
+		if err != nil {
+			log.WithError(err).Error("unable to shutdown http server")
+		}
+	}()
+
+	waitForShutdown()
+}
+
+func waitForShutdown() {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	<-sigChan
+	log.Warn("shutting down")
 }

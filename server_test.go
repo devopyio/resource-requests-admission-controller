@@ -1,15 +1,48 @@
 package main
 
-/*
+import (
+	"encoding/json"
+	"io"
+	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"gotest.tools/assert"
+	"k8s.io/api/admission/v1beta1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+)
+
 var (
-	AdmissionRequestNS = v1beta1.AdmissionReview{
+	AdmissionRequestPod = v1beta1.AdmissionReview{
 		TypeMeta: v1.TypeMeta{
 			Kind: "AdmissionReview",
 		},
 		Request: &v1beta1.AdmissionRequest{
 			UID: "e911857d-c318-11e8-bbad-025000000001",
 			Kind: v1.GroupVersionKind{
-				Kind: "Namespace",
+				Kind: "Pod",
+			},
+			Operation: "CREATE",
+			Object: runtime.RawExtension{
+				Raw: []byte(`{"metadata": {
+        						"name": "test",
+        						"uid": "e911857d-c318-11e8-bbad-025000000001",
+						        "creationTimestamp": "2018-09-28T12:20:39Z"
+      						}}`),
+			},
+		},
+	}
+	AdmissionRequestPodDisallow = v1beta1.AdmissionReview{
+		TypeMeta: v1.TypeMeta{
+			Kind: "AdmissionReview",
+		},
+		Request: &v1beta1.AdmissionRequest{
+			UID: "e911857d-c318-11e8-bbad-025000000001",
+			Kind: v1.GroupVersionKind{
+				Kind: "Pod",
 			},
 			Operation: "CREATE",
 			Object: runtime.RawExtension{
@@ -23,31 +56,65 @@ var (
 	}
 )
 
-func decodeResponse(body io.ReadCloser) *v1beta1.AdmissionReview {
-	response, _ := ioutil.ReadAll(body)
+func decodeResponse(t *testing.T, body io.ReadCloser) *v1beta1.AdmissionReview {
+	response, err := ioutil.ReadAll(body)
+	if err != nil {
+		t.Fatal(err)
+	}
 	review := &v1beta1.AdmissionReview{}
-	codecs.UniversalDeserializer().Decode(response, nil, review)
+	_, _, err = codecs.UniversalDeserializer().Decode(response, nil, review)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return review
 }
 
-func encodeRequest(review *v1beta1.AdmissionReview) []byte {
+func encodeRequest(t *testing.T, review *v1beta1.AdmissionReview) []byte {
 	ret, err := json.Marshal(review)
 	if err != nil {
-		logrus.Errorln(err)
+		t.Fatal(err)
 	}
 	return ret
 }
 
 func TestServeReturnsCorrectJson(t *testing.T) {
-	nsc := &NamespaceAdmission{}
-	server := httptest.NewServer(GetAdmissionServerNoSSL(nsc, ":8080").Handler)
-	requestString := string(encodeRequest(&AdmissionRequestNS))
-	myr := strings.NewReader(requestString)
-	r, _ := http.Post(server.URL, "application/json", myr)
-	review := decodeResponse(r.Body)
+	rra := &ResourceRequestsAdmission{}
+	server := httptest.NewServer(&AdmissionControllerServer{
+		AdmissionController: rra,
+		Decoder:             codecs.UniversalDeserializer(),
+	})
 
-	if review.Request.UID != AdmissionRequestNS.Request.UID {
-		t.Error("Request and response UID don't match")
+	requestString := string(encodeRequest(t, &AdmissionRequestPod))
+	myr := strings.NewReader(requestString)
+	r, err := http.Post(server.URL, "application/json", myr)
+	if err != nil {
+		t.Fatal(err)
 	}
+
+	review := decodeResponse(t, r.Body)
+
+	assert.Equal(t, review.Response.UID, AdmissionRequestPod.Request.UID)
+	assert.Equal(t, review.Response.Allowed, true)
+}
+
+/*
+func TestServeReturnsCorrectJson(t *testing.T) {
+	rra := &ResourceRequestsAdmission{}
+	server := httptest.NewServer(&AdmissionControllerServer{
+		AdmissionController: rra,
+		Decoder:             codecs.UniversalDeserializer(),
+	})
+
+	requestString := string(encodeRequest(t, &AdmissionRequestNS))
+	myr := strings.NewReader(requestString)
+	r, err := http.Post(server.URL, "application/json", myr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	review := decodeResponse(t, r.Body)
+
+	assert.Equal(t, review.Request.UID, AdmissionRequestNS.Request.UID)
+	assert.Equal(t, review.Response.Allowed, true)
 }
 */

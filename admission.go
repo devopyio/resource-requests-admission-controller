@@ -6,6 +6,9 @@ import (
 	"regexp"
 
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	log "github.com/sirupsen/logrus"
 	"k8s.io/api/admission/v1beta1"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	v1 "k8s.io/api/apps/v1"
@@ -14,6 +17,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 )
 
@@ -39,20 +43,47 @@ func init() {
 const (
 	deploymentKind  = "Deployment"
 	statefulsetKind = "Statefulset"
+	daemonset       = "Daemonset"
 	podKind         = "Pod"
 )
 
-type NameNamespace struct {
-	Name      string
-	Namespace string
-}
+var (
+	admissionCounter = promauto.NewCounterVec(prometheus.CounterOpts{Name: "admission_requests_total"}, []string{"allowed"})
+	errorsCounter    = promauto.NewCounter(prometheus.CounterOpts{Name: "errors_total"})
+)
 
 type ResourceRequestsAdmission struct {
-	ExcludedNames      map[NameNamespace]struct{}
-	ExcludedNamespaces map[string]struct{}
+	conf *Configer
+}
+
+func New(conf *Configer) *ResourceRequestsAdmission {
+	admissionCounter.WithLabelValues("true")
+	admissionCounter.WithLabelValues("false")
+
+	return &ResourceRequestsAdmission{
+		conf: conf,
+	}
 }
 
 func (rra *ResourceRequestsAdmission) HandleAdmission(req *v1beta1.AdmissionRequest) (*v1beta1.AdmissionResponse, error) {
+	resp, err := rra.handleAdmission(req)
+	if err != nil {
+		errorsCounter.Inc()
+		log.WithError(err).Error("unable to handle request: %v", req)
+		return resp, err
+	}
+
+	if resp.Allowed {
+		admissionCounter.WithLabelValues("true").Inc()
+	} else {
+		log.Infof("denying request for name: %s, namespace: %s, userInfo: %v", req.Name, req.Namespace, req.UserInfo)
+		admissionCounter.WithLabelValues("false").Inc()
+	}
+
+	return resp, nil
+}
+
+func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequest) (*v1beta1.AdmissionResponse, error) {
 	resp := &v1beta1.AdmissionResponse{
 		UID:     req.UID,
 		Allowed: true,
@@ -67,7 +98,6 @@ func (rra *ResourceRequestsAdmission) HandleAdmission(req *v1beta1.AdmissionRequ
 	}
 
 	name := req.Name
-
 	if kind == podKind {
 		match := podIdRegex.FindStringSubmatch(name)
 		if len(match) == 3 {
@@ -79,14 +109,11 @@ func (rra *ResourceRequestsAdmission) HandleAdmission(req *v1beta1.AdmissionRequ
 			}
 		}
 	}
-	if _, ok := rra.ExcludedNamespaces[req.Namespace]; ok {
-		return resp, nil
-	}
 
-	if _, ok := rra.ExcludedNames[NameNamespace{
+	if ok := rra.conf.IsExcluded(NameNamespace{
 		Name:      name,
 		Namespace: req.Namespace,
-	}]; ok {
+	}); ok {
 		return resp, nil
 	}
 
@@ -97,7 +124,7 @@ func (rra *ResourceRequestsAdmission) HandleAdmission(req *v1beta1.AdmissionRequ
 			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
 		}
 
-		if denyResp := validatePodSpec(req, pod.Spec); denyResp != nil {
+		if denyResp := rra.validatePodSpec(req, pod.Spec); denyResp != nil {
 			return denyResp, nil
 		}
 	case deploymentKind:
@@ -107,7 +134,7 @@ func (rra *ResourceRequestsAdmission) HandleAdmission(req *v1beta1.AdmissionRequ
 			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
 		}
 
-		if denyResp := validatePodSpec(req, deployment.Spec.Template.Spec); denyResp != nil {
+		if denyResp := rra.validatePodSpec(req, deployment.Spec.Template.Spec); denyResp != nil {
 			return denyResp, nil
 		}
 	case statefulsetKind:
@@ -116,22 +143,32 @@ func (rra *ResourceRequestsAdmission) HandleAdmission(req *v1beta1.AdmissionRequ
 			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
 		}
 
-		if denyResp := validatePodSpec(req, sts.Spec.Template.Spec); denyResp != nil {
+		if denyResp := rra.validatePodSpec(req, sts.Spec.Template.Spec); denyResp != nil {
 			return denyResp, nil
 		}
+	case daemonset:
+		var ds appsv1.DaemonSet
+		if err := json.Unmarshal(req.Object.Raw, &ds); err != nil {
+			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
+		}
+
+		if denyResp := rra.validatePodSpec(req, ds.Spec.Template.Spec); denyResp != nil {
+			return denyResp, nil
+		}
+
 	}
 
 	return resp, nil
 }
 
-func validatePodSpec(req *v1beta1.AdmissionRequest, podSpec corev1.PodSpec) *v1beta1.AdmissionResponse {
+func (rra *ResourceRequestsAdmission) validatePodSpec(req *v1beta1.AdmissionRequest, podSpec corev1.PodSpec) *v1beta1.AdmissionResponse {
 	for _, container := range podSpec.Containers {
 		if container.Resources.Requests.Cpu().CmpInt64(0) > 0 {
 			return &v1beta1.AdmissionResponse{
 				UID:     req.UID,
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: fmt.Sprintf("Error container %s requests.CPU: %s > 0", container.Name, container.Resources.Requests.Cpu()),
+					Message: fmt.Sprintf("error container %s requests.CPU: %s > 0", container.Name, container.Resources.Requests.Cpu()),
 				},
 			}
 		}
@@ -141,7 +178,28 @@ func validatePodSpec(req *v1beta1.AdmissionRequest, podSpec corev1.PodSpec) *v1b
 				UID:     req.UID,
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: fmt.Sprintf("Error container %s requests.Mem: %s > 0", container.Name, container.Resources.Requests.Cpu()),
+					Message: fmt.Sprintf("error container %s requests.Mem: %s > 0", container.Name, container.Resources.Requests.Cpu()),
+				},
+			}
+		}
+
+		cpuLimit, memLimit := rra.conf.GetResourceLimits()
+		if cpuLimit != nil && container.Resources.Limits.Cpu().Cmp(*cpuLimit) > 0 {
+			return &v1beta1.AdmissionResponse{
+				UID:     req.UID,
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: fmt.Sprintf("error container %s limits.CPU: %s > %s", container.Name, container.Resources.Limits.Cpu(), cpuLimit),
+				},
+			}
+		}
+
+		if memLimit != nil && container.Resources.Limits.Memory().Cmp(*memLimit) > 0 {
+			return &v1beta1.AdmissionResponse{
+				UID:     req.UID,
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: fmt.Sprintf("error container %s requests.MemoryLimit: %s > %s", container.Name, container.Resources.Limits.Memory(), memLimit),
 				},
 			}
 		}

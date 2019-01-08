@@ -1,3 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: resource-requests-controller
+  namespace: kube-system
+data:
+  config.yaml: |-
+    excludedNamespaces:
+    - kube-system
+    - sys-mon
+    - sys-ingress
+    excludedNames:
+    - name: pod-name
+      namespace: mynamespace
+    maxCPULimit: 2000m
+    maxMemoryLimit: 2Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -16,29 +33,37 @@ spec:
         app: resource-requests-controller
     spec:
       containers:
-      - image: devopyio/resource-requests-admission-controller:5e3b111cbcf8
+      - image: devopyio/resource-requests-admission-controller:70a0fa403ca7
         name: resource-requests-controller
         env:
         - name: TLS_CERT_FILE
           value: "/etc/tls/cert.pem"
         - name: TLS_KEY_FILE
           value: "/etc/tls/key.pem"
-        - name: EXCLUDE_NAMESPACES
-          value: "kube-system,kube-public,sys-ingress,sys-mon,default" 
-        - name: EXCLUDE_NAMES
-          value: "pod.kube-system,pod2.kube-system"
+        - name: CONFIG_FILE
+          value: "/etc/rra/config.yaml"
         - name: LOG_LEVEL
-          value: "info"
+          value: "debug"
         ports:
         - name: https
           containerPort: 8443
+        - name: metrics
+          containerPort: 8090
         volumeMounts:
         - name: tls
           mountPath: /etc/tls/
+        - name: config
+          mountPath: /etc/rra/
       volumes:
       - name: tls
         secret:
           secretName: resource-requests-controller
+      - name: config
+        configMap:
+          name: resource-requests-admission-controller
+          items:
+          - key: config.yaml
+            path: config.yaml
 ---
 apiVersion: v1
 kind: Service
@@ -47,6 +72,9 @@ metadata:
     app: resource-requests-controller
   name: resource-requests-controller
   namespace: kube-system
+  annotations:
+    prometheus.io/scrape: 'true'
+    prometheus.io/port: '8090'
 spec:
   ports:
   - name: https
