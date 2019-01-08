@@ -102,7 +102,7 @@ func (c *Configer) load() error {
 		c.excludedNames[nn] = struct{}{}
 	}
 
-	log.Infof("exluding namespaces: %q, names: %q, maxMemLimit: %v, maxCPULimit: %v, maxMemLimit: %v", config.Namespaces, config.Names, c.maxCPULimit, c.maxMemLimit)
+	log.Infof("exluding namespaces: %q, names: %q, maxCPULimit: %v, maxMemLimit: %v", config.Namespaces, config.Names, c.maxCPULimit, c.maxMemLimit)
 	return nil
 }
 
