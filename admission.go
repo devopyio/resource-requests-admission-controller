@@ -241,7 +241,7 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 				UID:     req.UID,
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: fmt.Sprintf("error persistentVolumeClaim %s size is %v > %s", pvc.Name, vSize, maxSize),
+					Message: fmt.Sprintf("error persistentVolumeClaim %s size is %s > %s", pvc.Name, vSize.String(), maxSize),
 				},
 			}, nil
 		}
