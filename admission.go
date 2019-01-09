@@ -237,6 +237,8 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			return resp, nil
 		}
 		if vSize.Cmp(*maxSize) > 0 {
+
+			log.Infof("denying request for pvc name: %s, namespace: %s, userInfo: %v", pvc.Name, req.Namespace, req.UserInfo)
 			return &v1beta1.AdmissionResponse{
 				UID:     req.UID,
 				Allowed: false,
