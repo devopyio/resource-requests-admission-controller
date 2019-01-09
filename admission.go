@@ -183,6 +183,25 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 
 func (rra *ResourceRequestsAdmission) validatePodSpec(req *v1beta1.AdmissionRequest, podSpec corev1.PodSpec) *v1beta1.AdmissionResponse {
 	for _, container := range podSpec.Containers {
+		if _, ok := container.Resources.Requests[corev1.ResourceCPU]; !ok {
+			return &v1beta1.AdmissionResponse{
+				UID:     req.UID,
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: fmt.Sprintf("error container %s requests.CPU is empty, must be 0", container.Name),
+				},
+			}
+		}
+		if _, ok := container.Resources.Requests[corev1.ResourceMemory]; !ok {
+			return &v1beta1.AdmissionResponse{
+				UID:     req.UID,
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: fmt.Sprintf("error container %s requests.Memory is empty, must be 0", container.Name),
+				},
+			}
+		}
+
 		if container.Resources.Requests.Cpu().CmpInt64(0) > 0 {
 			return &v1beta1.AdmissionResponse{
 				UID:     req.UID,
@@ -198,7 +217,7 @@ func (rra *ResourceRequestsAdmission) validatePodSpec(req *v1beta1.AdmissionRequ
 				UID:     req.UID,
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: fmt.Sprintf("error container %s requests.Mem: %s > 0", container.Name, container.Resources.Requests.Cpu()),
+					Message: fmt.Sprintf("error container %s requests.Mem: %s > 0", container.Name, container.Resources.Requests.Memory()),
 				},
 			}
 		}
