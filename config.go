@@ -7,9 +7,16 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	log "github.com/sirupsen/logrus"
 	yaml "gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/api/resource"
+)
+
+var (
+	reloadCounter       = promauto.NewCounter(prometheus.CounterOpts{Name: "reload_total"})
+	reloadErrorsCounter = promauto.NewCounter(prometheus.CounterOpts{Name: "reload_errors_total"})
 )
 
 type NameNamespace struct {
@@ -108,12 +115,11 @@ func (c *Configer) load() error {
 
 func (c *Configer) IsExcluded(nn NameNamespace) bool {
 	c.m.RLock()
+	defer c.m.RUnlock()
 	if _, ok := c.excludedNamespaces[nn.Namespace]; ok {
-		c.m.RUnlock()
 		return true
 	}
 	if _, ok := c.excludedNames[nn]; ok {
-		c.m.RUnlock()
 		return true
 	}
 
@@ -154,8 +160,11 @@ func (c *Configer) Watch() {
 
 		err := c.load()
 		if err != nil {
+			reloadErrorsCounter.Inc()
 			log.WithError(err).Error("config load error")
 		}
+
+		reloadCounter.Inc()
 	}
 }
 

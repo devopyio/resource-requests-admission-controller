@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"gotest.tools/assert"
+	"github.com/stretchr/testify/assert"
 	"k8s.io/api/admission/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"

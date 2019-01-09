@@ -6,4 +6,6 @@ go-deps:
 go-build:
 	CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-X main.Version=$(GIT_HASH) -extldflags "-static"' .
 docker-build:
-	docker build . -t resource-requests-admission-controller
+	docker build . -t resource-requests-admission-controller:latest
+	docker tag resource-requests-admission-controller:latest devopyio/resource-requests-admission-controller:$(GIT_HASH)
+	docker push devopyio/resource-requests-admission-controller:$(GIT_HASH)

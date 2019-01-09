@@ -10,10 +10,10 @@ data:
     - sys-mon
     - sys-ingress
     excludedNames:
-    - name: pod-name
+    - name: shell
       namespace: mynamespace
     maxCPULimit: 2000m
-    maxMemoryLimit: 2Gi
+    maxMemLimit: 2048
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -33,7 +33,7 @@ spec:
         app: resource-requests-controller
     spec:
       containers:
-      - image: devopyio/resource-requests-admission-controller:400e6ed87f05
+      - image: devopyio/resource-requests-admission-controller:b1798a3235b3
         name: resource-requests-controller
         env:
         - name: TLS_CERT_FILE

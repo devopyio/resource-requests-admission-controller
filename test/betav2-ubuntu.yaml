@@ -1,4 +1,4 @@
-apiVersion: apps/v1
+apiVersion: apps/v1beta2
 kind: Deployment
 metadata:
   creationTimestamp: null
@@ -23,6 +23,5 @@ spec:
         name: shell
         resources:
           limits:
-            cpu: 2
-            memory: 1Gi
+            memory: 2000
 status: {}

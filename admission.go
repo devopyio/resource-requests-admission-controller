@@ -30,6 +30,9 @@ var (
 
 	podIdRegex  = regexp.MustCompile("(.*)(-[0-9A-Za-z]{10}-[0-9A-Za-z]{5})")
 	podId2Regex = regexp.MustCompile("(.*)(-[0-9]+)")
+
+	admissionCounter = promauto.NewCounterVec(prometheus.CounterOpts{Name: "admission_requests_total"}, []string{"allowed"})
+	errorsCounter    = promauto.NewCounter(prometheus.CounterOpts{Name: "errors_total"})
 )
 
 func init() {
@@ -45,11 +48,6 @@ const (
 	statefulsetKind = "Statefulset"
 	daemonset       = "Daemonset"
 	podKind         = "Pod"
-)
-
-var (
-	admissionCounter = promauto.NewCounterVec(prometheus.CounterOpts{Name: "admission_requests_total"}, []string{"allowed"})
-	errorsCounter    = promauto.NewCounter(prometheus.CounterOpts{Name: "errors_total"})
 )
 
 type ResourceRequestsAdmission struct {
@@ -69,14 +67,13 @@ func (rra *ResourceRequestsAdmission) HandleAdmission(req *v1beta1.AdmissionRequ
 	resp, err := rra.handleAdmission(req)
 	if err != nil {
 		errorsCounter.Inc()
-		log.WithError(err).Error("unable to handle request: %v", req)
+		log.WithError(err).Errorf("unable to handle request: %v", req)
 		return resp, err
 	}
 
 	if resp.Allowed {
 		admissionCounter.WithLabelValues("true").Inc()
 	} else {
-		log.Infof("denying request for name: %s, namespace: %s, userInfo: %v", req.Name, req.Namespace, req.UserInfo)
 		admissionCounter.WithLabelValues("false").Inc()
 	}
 
@@ -97,8 +94,15 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 		return resp, nil
 	}
 
-	name := req.Name
-	if kind == podKind {
+	switch kind {
+	case podKind:
+
+		var pod corev1.Pod
+		if err := json.Unmarshal(req.Object.Raw, &pod); err != nil {
+			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
+		}
+
+		name := pod.Name
 		match := podIdRegex.FindStringSubmatch(name)
 		if len(match) == 3 {
 			name = match[1]
@@ -108,33 +112,33 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 				name = match[1]
 			}
 		}
-	}
 
-	if ok := rra.conf.IsExcluded(NameNamespace{
-		Name:      name,
-		Namespace: req.Namespace,
-	}); ok {
-		return resp, nil
-	}
-
-	switch kind {
-	case podKind:
-		var pod corev1.Pod
-		if err := json.Unmarshal(req.Object.Raw, &pod); err != nil {
-			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
+		if ok := rra.conf.IsExcluded(NameNamespace{
+			Name:      name,
+			Namespace: req.Namespace,
+		}); ok {
+			return resp, nil
 		}
 
 		if denyResp := rra.validatePodSpec(req, pod.Spec); denyResp != nil {
+			log.Infof("denying request for pod name: %s, namespace: %s, userInfo: %v", name, req.Namespace, req.UserInfo)
 			return denyResp, nil
 		}
 	case deploymentKind:
-		//TODO: handle conversion
 		var deployment appsv1.Deployment
 		if err := json.Unmarshal(req.Object.Raw, &deployment); err != nil {
 			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
 		}
 
+		if ok := rra.conf.IsExcluded(NameNamespace{
+			Name:      deployment.Name,
+			Namespace: req.Namespace,
+		}); ok {
+			return resp, nil
+		}
+
 		if denyResp := rra.validatePodSpec(req, deployment.Spec.Template.Spec); denyResp != nil {
+			log.Infof("denying request for deployment name: %s, namespace: %s, userInfo: %v", deployment.Name, req.Namespace, req.UserInfo)
 			return denyResp, nil
 		}
 	case statefulsetKind:
@@ -143,7 +147,15 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
 		}
 
+		if ok := rra.conf.IsExcluded(NameNamespace{
+			Name:      sts.Name,
+			Namespace: req.Namespace,
+		}); ok {
+			return resp, nil
+		}
+
 		if denyResp := rra.validatePodSpec(req, sts.Spec.Template.Spec); denyResp != nil {
+			log.Infof("denying request for statefulset name: %s, namespace: %s, userInfo: %v", sts.Name, req.Namespace, req.UserInfo)
 			return denyResp, nil
 		}
 	case daemonset:
@@ -152,7 +164,15 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
 		}
 
+		if ok := rra.conf.IsExcluded(NameNamespace{
+			Name:      ds.Name,
+			Namespace: req.Namespace,
+		}); ok {
+			return resp, nil
+		}
+
 		if denyResp := rra.validatePodSpec(req, ds.Spec.Template.Spec); denyResp != nil {
+			log.Infof("denying request for daemonset name: %s, namespace: %s, userInfo: %v", ds.Name, req.Namespace, req.UserInfo)
 			return denyResp, nil
 		}
 

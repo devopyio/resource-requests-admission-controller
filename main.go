@@ -3,15 +3,16 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
+	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/alecthomas/kingpin"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	ver "github.com/prometheus/common/version"
 	log "github.com/sirupsen/logrus"
@@ -32,7 +33,7 @@ func main() {
 	certFile := app.Flag("tls-cert-file", "").Envar("TLS_CERT_FILE").Required().String()
 	keyFile := app.Flag("tls-private-key-file", "").Envar("TLS_KEY_FILE").Required().String()
 	configFile := app.Flag("config-file", "File path to the config").Envar("CONFIG_FILE").Required().String()
-	refreshInterval := app.Flag("refresh-interval", "Refresh interval in if no file change happens.").Envar("REFRESH_INTERVAL").Default("5m").Duration()
+	refreshInterval := app.Flag("refresh-interval", "Refresh interval in if no file change happens.").Envar("REFRESH_INTERVAL").Default("1h").Duration()
 	logLevel := app.Flag("log.level", "Log level.").Envar("LOG_LEVEL").
 		Default("info").Enum("error", "warn", "info", "debug")
 	logFormat := app.Flag("log.format", "Log format.").Envar("LOG_FORMAT").
@@ -64,7 +65,7 @@ func main() {
 
 	configer, err := NewConfiger(*configFile, *refreshInterval)
 	if err != nil {
-		log.WithError(err).Fatal("unable to load config file: %s", *configFile)
+		log.WithError(err).Fatalf("unable to load config file: %s", *configFile)
 	}
 	defer configer.Close()
 
@@ -74,10 +75,21 @@ func main() {
 	if err != nil {
 		log.WithError(err).Fatal("unable to load certificates")
 	}
+	_, port, err := net.SplitHostPort(*addr)
+	if err != nil {
+		log.WithError(err).Fatal("unable to parse address")
+	}
 
-	opsServer := http.Server{
-		Addr:    fmt.Sprintf(*opsAddr),
-		Handler: promhttp.Handler(),
+	hc, err := NewHealhChecker(port)
+	if err != nil {
+		log.WithError(err).Fatal("unable to create healthcheck")
+	}
+	http.Handle("/metrics", promhttp.Handler())
+	http.Handle("/health", hc)
+
+	opsServer := &http.Server{
+		Addr:    *opsAddr,
+		Handler: http.DefaultServeMux,
 	}
 	go func() {
 		opsErr := opsServer.ListenAndServe()
@@ -97,10 +109,12 @@ func main() {
 
 	log.Infof("app started,listening on: %s, prometheus on: %s", *addr, *opsAddr)
 	server := &http.Server{
-		Handler: prometheus.InstrumentHandler("admission", &AdmissionControllerServer{
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		Handler: http.TimeoutHandler(&AdmissionControllerServer{
 			AdmissionController: rra,
 			Decoder:             codecs.UniversalDeserializer(),
-		}),
+		}, 20*time.Second, "Service Unavailable"),
 		Addr: *addr,
 		TLSConfig: &tls.Config{
 			Certificates: []tls.Certificate{cert},
