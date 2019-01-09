@@ -33,7 +33,7 @@ spec:
         app: resource-requests-controller
     spec:
       containers:
-      - image: devopyio/resource-requests-admission-controller:a820b7790c40aa34192606f76586954581014947
+      - image: devopyio/resource-requests-admission-controller:35d5f6301a66f3009b37c5c5055668ff04527e84
         name: resource-requests-controller
         env:
         - name: TLS_CERT_FILE
@@ -49,20 +49,20 @@ spec:
           containerPort: 8443
         - name: metrics
           containerPort: 8090
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: metrics
-            timeoutSeconds: 15
-            failureThreshold: 6
-            successThreshold: 1
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: metrics
-            timeoutSeconds: 15
-            failureThreshold: 3
-            successThreshold: 1
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: metrics
+          timeoutSeconds: 15
+          failureThreshold: 6
+          successThreshold: 1
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: metrics
+          timeoutSeconds: 15
+          failureThreshold: 3
+          successThreshold: 1
         volumeMounts:
         - name: tls
           mountPath: /etc/tls/

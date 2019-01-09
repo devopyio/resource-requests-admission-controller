@@ -222,7 +222,7 @@ func (rra *ResourceRequestsAdmission) validatePodSpec(req *v1beta1.AdmissionRequ
 				UID:     req.UID,
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: fmt.Sprintf("error container %s requests.Mem: %s > 0", container.Name, container.Resources.Requests.Memory()),
+					Message: fmt.Sprintf("error container %s requests.Memory: %s > 0", container.Name, container.Resources.Requests.Memory()),
 				},
 			}
 		}
@@ -243,7 +243,7 @@ func (rra *ResourceRequestsAdmission) validatePodSpec(req *v1beta1.AdmissionRequ
 				UID:     req.UID,
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: fmt.Sprintf("error container %s requests.MemoryLimit: %s > %s", container.Name, container.Resources.Limits.Memory(), memLimit),
+					Message: fmt.Sprintf("error container %s limits.Memory: %s > %s", container.Name, container.Resources.Limits.Memory(), memLimit),
 				},
 			}
 		}
