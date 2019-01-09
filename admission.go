@@ -15,6 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -50,11 +51,15 @@ const (
 	podKind         = "Pod"
 )
 
+type Conf interface {
+	GetResourceLimits() (cpu *resource.Quantity, mem *resource.Quantity)
+	IsExcluded(nn NameNamespace) bool
+}
 type ResourceRequestsAdmission struct {
-	conf *Configer
+	conf Conf
 }
 
-func New(conf *Configer) *ResourceRequestsAdmission {
+func New(conf Conf) *ResourceRequestsAdmission {
 	admissionCounter.WithLabelValues("true")
 	admissionCounter.WithLabelValues("false")
 

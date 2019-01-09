@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"k8s.io/api/admission/v1beta1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -78,7 +80,8 @@ func encodeRequest(t *testing.T, review *v1beta1.AdmissionReview) []byte {
 }
 
 func TestServeReturnsCorrectJson(t *testing.T) {
-	rra := &ResourceRequestsAdmission{}
+	conf := &MockConfiger{}
+	rra := &ResourceRequestsAdmission{conf}
 	server := httptest.NewServer(&AdmissionControllerServer{
 		AdmissionController: rra,
 		Decoder:             codecs.UniversalDeserializer(),
@@ -118,3 +121,38 @@ func TestServeReturnsCorrectJson(t *testing.T) {
 	assert.Equal(t, review.Response.Allowed, true)
 }
 */
+
+type MockConfiger struct {
+	cpu *resource.Quantity
+	mem *resource.Quantity
+}
+
+func (c *MockConfiger) IsExcluded(nn NameNamespace) bool {
+	return false
+}
+
+func (c *MockConfiger) GetResourceLimits() (cpu *resource.Quantity, mem *resource.Quantity) {
+	return cpu, mem
+}
+
+func TestCompareMemoryQuantity(t *testing.T) {
+	q1 := resource.MustParse("1Gi")
+	q2 := resource.MustParse("2147483648")
+
+	fmt.Println(q1.Value())
+	fmt.Println(q2.Value())
+
+	fmt.Printf("%v, %v", q1, q2)
+	assert.True(t, q1.Cmp(q2) < 0)
+}
+
+func TestCompareCPUQuantity(t *testing.T) {
+	q1 := resource.MustParse("100m")
+	q2 := resource.MustParse("0.5")
+
+	fmt.Println(q1.MilliValue())
+	fmt.Println(q2.MilliValue())
+
+	fmt.Printf("%v, %v", q1, q2)
+	assert.True(t, q1.Cmp(q2) < 0)
+}
