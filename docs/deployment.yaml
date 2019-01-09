@@ -16,7 +16,7 @@ data:
       namespace: mynamespace
     maxCPULimit: 2
     maxMemLimit: 2Gi
-    maxPvsSize: 50Gi
+    maxPvcSize: 50Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -36,7 +36,7 @@ spec:
         app: resource-requests-controller
     spec:
       containers:
-      - image: devopyio/resource-requests-admission-controller:e1fc2ca907b7b92ef949f17c0543fbaeeaeed665
+      - image: devopyio/resource-requests-admission-controller:a30f146e43326436c10e5cd8867481deab51a526
         name: resource-requests-controller
         env:
         - name: TLS_CERT_FILE
@@ -46,7 +46,7 @@ spec:
         - name: CONFIG_FILE
           value: "/etc/rra/config.yaml"
         - name: LOG_LEVEL
-          value: "debug"
+          value: "info"
         ports:
         - name: https
           containerPort: 8443

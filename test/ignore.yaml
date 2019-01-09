@@ -1,10 +1,10 @@
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   creationTimestamp: null
   labels:
     run: shell
-  name: ubuntu
+  name: shell1234
   namespace: mynamespace
 spec:
   replicas: 1
@@ -23,6 +23,9 @@ spec:
         name: shell
         resources:
           requests:
-            cpu: 0 
-            memory: 3Gi
+            cpu: 1
+            memory: 1Gi
+          limits:
+            cpu: 3
+            memory: 1Gi
 status: {}
