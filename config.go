@@ -101,6 +101,8 @@ func (c *Configer) load() error {
 		c.maxMemLimit = &q
 	}
 
+	c.excludedNamespaces = make(map[string]struct{})
+	c.excludedNames = make(map[NameNamespace]struct{})
 	for _, ns := range config.Namespaces {
 		c.excludedNamespaces[ns] = struct{}{}
 	}
@@ -132,11 +134,11 @@ func (c *Configer) GetResourceLimits() (cpu *resource.Quantity, mem *resource.Qu
 	defer c.m.RUnlock()
 
 	if c.maxCPULimit != nil {
-		cpuCopy := *c.maxCPULimit
+		cpuCopy := c.maxCPULimit.DeepCopy()
 		cpu = &cpuCopy
 	}
 	if c.maxMemLimit != nil {
-		memCopy := *c.maxMemLimit
+		memCopy := c.maxMemLimit.DeepCopy()
 		mem = &memCopy
 	}
 	return cpu, mem

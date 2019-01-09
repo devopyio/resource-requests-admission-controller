@@ -10,7 +10,7 @@ data:
     - sys-mon
     - sys-ingress
     excludedNames:
-    - name: shell
+    - name: shell123
       namespace: mynamespace
     maxCPULimit: 2000m
     maxMemLimit: 2048
@@ -33,7 +33,7 @@ spec:
         app: resource-requests-controller
     spec:
       containers:
-      - image: devopyio/resource-requests-admission-controller:b1798a3235b3
+      - image: devopyio/resource-requests-admission-controller:164abd67190c7809d67d141e269b7ab4a641addd
         name: resource-requests-controller
         env:
         - name: TLS_CERT_FILE
@@ -49,6 +49,20 @@ spec:
           containerPort: 8443
         - name: metrics
           containerPort: 8090
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: metrics
+          timeoutSeconds: 15
+          failureThreshold: 6
+          successThreshold: 1
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: metrics
+          timeoutSeconds: 15
+          failureThreshold: 3
+          successThreshold: 1
         volumeMounts:
         - name: tls
           mountPath: /etc/tls/
