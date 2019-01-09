@@ -11,10 +11,11 @@ import (
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/admission/v1beta1"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
-	v1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-
 	appsv1 "k8s.io/api/apps/v1"
+	v1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	batchv1beta1 "k8s.io/api/batch/v1beta1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -47,8 +48,10 @@ func init() {
 const (
 	deploymentKind  = "Deployment"
 	statefulsetKind = "Statefulset"
-	daemonset       = "Daemonset"
+	daemonsetKind   = "DaemonSet"
 	podKind         = "Pod"
+	jobKind         = "Job"
+	cronJobKind     = "CronJob"
 )
 
 type Conf interface {
@@ -90,18 +93,13 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 		UID:     req.UID,
 		Allowed: true,
 	}
-	kind := req.Kind.Kind
-	if kind != deploymentKind && kind != statefulsetKind && kind != podKind {
-		return resp, nil
-	}
 
 	if req.Operation != v1beta1.Create && req.Operation != v1beta1.Update {
 		return resp, nil
 	}
 
-	switch kind {
+	switch req.Kind.Kind {
 	case podKind:
-
 		var pod corev1.Pod
 		if err := json.Unmarshal(req.Object.Raw, &pod); err != nil {
 			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
@@ -163,7 +161,7 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			log.Infof("denying request for statefulset name: %s, namespace: %s, userInfo: %v", sts.Name, req.Namespace, req.UserInfo)
 			return denyResp, nil
 		}
-	case daemonset:
+	case daemonsetKind:
 		var ds appsv1.DaemonSet
 		if err := json.Unmarshal(req.Object.Raw, &ds); err != nil {
 			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
@@ -181,6 +179,40 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			return denyResp, nil
 		}
 
+	case cronJobKind:
+		var cj batchv1beta1.CronJob
+		if err := json.Unmarshal(req.Object.Raw, &cj); err != nil {
+			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
+		}
+
+		if ok := rra.conf.IsExcluded(NameNamespace{
+			Name:      cj.Name,
+			Namespace: req.Namespace,
+		}); ok {
+			return resp, nil
+		}
+
+		if denyResp := rra.validatePodSpec(req, cj.Spec.JobTemplate.Spec.Template.Spec); denyResp != nil {
+			log.Infof("denying request for daemonset name: %s, namespace: %s, userInfo: %v", cj.Name, req.Namespace, req.UserInfo)
+			return denyResp, nil
+		}
+	case jobKind:
+		var j batchv1.Job
+		if err := json.Unmarshal(req.Object.Raw, &j); err != nil {
+			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
+		}
+
+		if ok := rra.conf.IsExcluded(NameNamespace{
+			Name:      j.Name,
+			Namespace: req.Namespace,
+		}); ok {
+			return resp, nil
+		}
+
+		if denyResp := rra.validatePodSpec(req, j.Spec.Template.Spec); denyResp != nil {
+			log.Infof("denying request for daemonset name: %s, namespace: %s, userInfo: %v", j.Name, req.Namespace, req.UserInfo)
+			return denyResp, nil
+		}
 	}
 
 	return resp, nil
