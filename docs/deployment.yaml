@@ -12,8 +12,11 @@ data:
     excludedNames:
     - name: shell123
       namespace: mynamespace
+    - name: shell1235
+      namespace: mynamespace
     maxCPULimit: 2
     maxMemLimit: 2Gi
+    maxPvsSize: 50Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -33,7 +36,7 @@ spec:
         app: resource-requests-controller
     spec:
       containers:
-      - image: devopyio/resource-requests-admission-controller:35d5f6301a66f3009b37c5c5055668ff04527e84
+      - image: devopyio/resource-requests-admission-controller:e1fc2ca907b7b92ef949f17c0543fbaeeaeed665
         name: resource-requests-controller
         env:
         - name: TLS_CERT_FILE

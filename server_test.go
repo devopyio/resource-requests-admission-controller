@@ -135,6 +135,10 @@ func (c *MockConfiger) GetResourceLimits() (cpu *resource.Quantity, mem *resourc
 	return cpu, mem
 }
 
+func (c *MockConfiger) GetMaxPVCSize() *resource.Quantity {
+	return nil
+}
+
 func TestCompareMemoryQuantity(t *testing.T) {
 	q1 := resource.MustParse("1Gi")
 	q2 := resource.MustParse("2147483648")

@@ -19,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 )
 
@@ -52,10 +51,12 @@ const (
 	podKind         = "Pod"
 	jobKind         = "Job"
 	cronJobKind     = "CronJob"
+	pvcKind         = "PersistentVolumeClaim"
 )
 
 type Conf interface {
 	GetResourceLimits() (cpu *resource.Quantity, mem *resource.Quantity)
+	GetMaxPVCSize() *resource.Quantity
 	IsExcluded(nn NameNamespace) bool
 }
 type ResourceRequestsAdmission struct {
@@ -212,6 +213,37 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 		if denyResp := rra.validatePodSpec(req, j.Spec.Template.Spec); denyResp != nil {
 			log.Infof("denying request for daemonset name: %s, namespace: %s, userInfo: %v", j.Name, req.Namespace, req.UserInfo)
 			return denyResp, nil
+		}
+	case pvcKind:
+		var pvc corev1.PersistentVolumeClaim
+		if err := json.Unmarshal(req.Object.Raw, &pvc); err != nil {
+			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
+		}
+
+		if ok := rra.conf.IsExcluded(NameNamespace{
+			Name:      pvc.Name,
+			Namespace: req.Namespace,
+		}); ok {
+			return resp, nil
+		}
+
+		vSize, ok := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+		if !ok {
+			return resp, nil
+		}
+
+		maxSize := rra.conf.GetMaxPVCSize()
+		if maxSize == nil {
+			return resp, nil
+		}
+		if vSize.Cmp(*maxSize) > 0 {
+			return &v1beta1.AdmissionResponse{
+				UID:     req.UID,
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: fmt.Sprintf("error persistentVolumeClaim %s size is %v > %s", pvc.Name, vSize, maxSize),
+				},
+			}, nil
 		}
 	}
 

@@ -33,7 +33,7 @@ func main() {
 	certFile := app.Flag("tls-cert-file", "").Envar("TLS_CERT_FILE").Required().String()
 	keyFile := app.Flag("tls-private-key-file", "").Envar("TLS_KEY_FILE").Required().String()
 	configFile := app.Flag("config-file", "File path to the config").Envar("CONFIG_FILE").Required().String()
-	refreshInterval := app.Flag("refresh-interval", "Refresh interval in if no file change happens.").Envar("REFRESH_INTERVAL").Default("1h").Duration()
+	refreshInterval := app.Flag("refresh-interval", "Refresh interval in if no file change happens.").Envar("REFRESH_INTERVAL").Default("5m").Duration()
 	logLevel := app.Flag("log.level", "Log level.").Envar("LOG_LEVEL").
 		Default("info").Enum("error", "warn", "info", "debug")
 	logFormat := app.Flag("log.format", "Log format.").Envar("LOG_FORMAT").
