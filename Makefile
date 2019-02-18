@@ -2,6 +2,7 @@ DATE := $(shell date +%FT%T%z)
 USER := $(shell whoami)
 GIT_HASH := $(shell git --no-pager describe --tags --always)
 BRANCH := $(shell git branch | grep \* | cut -d ' ' -f2)
+DOCKER_IMAGE := resource-requests-admission-controller
 GO111MODULE := on
 all: go-deps go-test go-build docker-push
 
@@ -22,5 +23,5 @@ docker-login:
 	docker login -u $(DOCKER_USERNAME) -p $(DOCKER_PASSWORD)
 
 docker-push: docker-build docker-login
-	docker tag zabbix-alertmanager $(DOCKER_USERNAME)/zabbix-alertmanager:$(GIT_HASH)
-	docker push $(DOCKER_USERNAME)/zabbix-alertmanager:$(GIT_HASH)
+	docker tag $(DOCKER_IMAGE) $(DOCKER_USERNAME)/$(DOCKER_IMAGE):$(GIT_HASH)
+	docker push $(DOCKER_USERNAME)/$(DOCKER_IMAGE):$(GIT_HASH)
