@@ -26,7 +26,7 @@ metadata:
   name: resource-requests-controller
   namespace: kube-system
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: resource-requests-controller
@@ -36,7 +36,7 @@ spec:
         app: resource-requests-controller
     spec:
       containers:
-      - image: devopyio/resource-requests-admission-controller:a30f146e43326436c10e5cd8867481deab51a526
+      - image: devopyio/resource-requests-admission-controller:b91e4eaf32e4246562e3281275254226f77412ca
         name: resource-requests-controller
         env:
         - name: TLS_CERT_FILE
