@@ -17,7 +17,7 @@ go-test:
 	$(BUILDENV) go test $(TESTFLAGS) ./...
 
 docker-build:
-	docker build . -t zabbix-alertmanager
+	docker build . -t $(DOCKER_IMAGE)
 
 docker-login:
 	docker login -u $(DOCKER_USERNAME) -p $(DOCKER_PASSWORD)
