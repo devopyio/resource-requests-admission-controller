@@ -3,18 +3,32 @@ USER := $(shell whoami)
 GIT_HASH := $(shell git --no-pager describe --tags --always)
 BRANCH := $(shell git branch | grep \* | cut -d ' ' -f2)
 DOCKER_IMAGE := resource-requests-admission-controller
+
+LINT_FLAGS := run --deadline=120s
+LINTER := ./bin/golangci-lint
+TESTFLAGS := -v -cover
+
 GO111MODULE := on
-all: go-deps go-test go-build docker-push
+all: $(LINTER) deps test lint build
 
-go-deps:
-	go get -t ./...
+$(LINTER):
+	curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh| sh -s v1.15.0
 
-go-build:
+.PHONY: lint
+lint: $(LINTER)
+	$(LINTER) $(LINT_FLAGS) ./...
+
+.PHONY: deps
+deps:
+	go get ./..
+
+.PHONY: test
+test:
+	go test $(TESTFLAGS) ./...
+
+.PHONY: build
+build:
 	CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-s -X main.version=$(GIT_HASH) -X main.date="$(DATE)" -X main.branch=$(BRANCH) -X main.revision=$(GIT_HASH) -X main.user=$(USER) -extldflags "-static"' .
-
-.PHONY: go-test
-go-test:
-	$(BUILDENV) go test $(TESTFLAGS) ./...
 
 docker-build:
 	docker build . -t $(DOCKER_IMAGE)
