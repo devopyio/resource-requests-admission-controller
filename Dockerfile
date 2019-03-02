@@ -6,8 +6,8 @@ ADD . /go/src/github.com/devopyio/resource-requests-admission-controller
 
 WORKDIR /go/src/github.com/devopyio/resource-requests-admission-controller
 
-RUN make go-deps
-RUN make go-build
+ENV GO111MODULE on
+RUN make build
 RUN mv resource-requests-admission-controller /resource-requests-admission-controller
 
 FROM alpine:latest
