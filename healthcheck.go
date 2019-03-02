@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	"k8s.io/api/admission/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -74,26 +75,40 @@ func (hc *Healthchecker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resp, err := hc.client.Post("https://localhost:"+hc.port, "application/json", bytes.NewReader(hc.reqBody))
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
+		_, err := w.Write([]byte(err.Error()))
+		if err != nil {
+			log.WithError(err).Warn("could not write error response")
+		}
 	}
 	defer resp.Body.Close()
 
 	response, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
+		_, err := w.Write([]byte(err.Error()))
+		if err != nil {
+			log.WithError(err).Warn("could not write error response")
+		}
 	}
 
 	review := &v1beta1.AdmissionReview{}
 	_, _, err = codecs.UniversalDeserializer().Decode(response, nil, review)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
+		_, err := w.Write([]byte(err.Error()))
+		if err != nil {
+			log.WithError(err).Warn("could not write error response")
+		}
+
 	}
 
 	if !review.Response.Allowed {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("error request not allowed"))
+		_, err := w.Write([]byte("error request not allowed"))
+		if err != nil {
+			log.WithError(err).Warn("could not write error response")
+		}
+
 	}
 
 	w.WriteHeader(http.StatusOK)
