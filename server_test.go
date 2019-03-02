@@ -48,11 +48,31 @@ var (
 			},
 			Operation: "CREATE",
 			Object: runtime.RawExtension{
-				Raw: []byte(`{"metadata": {
-        						"name": "test",
-        						"uid": "e911857d-c318-11e8-bbad-025000000001",
-						        "creationTimestamp": "2018-09-28T12:20:39Z"
-      						}}`),
+				Raw: []byte(`
+{
+   "metadata":{
+      "name":"test",
+      "uid":"e911857d-c318-11e8-bbad-025000000001",
+      "creationTimestamp":"2018-09-28T12:20:39Z"
+   },
+   "spec":{
+      "containers":[
+         {
+            "name":"test",
+            "resources":{
+               "limits":{
+                  "cpu":2,
+                  "memory":2
+               },
+			   "requests": {
+			      "cpu":0,
+				  "memory":0
+			   }
+            }
+         }
+      ]
+   }
+}`),
 			},
 		},
 	}
@@ -100,15 +120,20 @@ func TestServeReturnsCorrectJson(t *testing.T) {
 	assert.Equal(t, review.Response.Allowed, true)
 }
 
-/*
-func TestServeReturnsCorrectJson(t *testing.T) {
-	rra := &ResourceRequestsAdmission{}
+func TestServePodOverLimitReturnsCorrectJson(t *testing.T) {
+	cpu := resource.MustParse("1")
+	mem := resource.MustParse("1Gi")
+	conf := &MockConfiger{
+		cpu: &cpu,
+		mem: &mem,
+	}
+	rra := &ResourceRequestsAdmission{conf}
 	server := httptest.NewServer(&AdmissionControllerServer{
 		AdmissionController: rra,
 		Decoder:             codecs.UniversalDeserializer(),
 	})
 
-	requestString := string(encodeRequest(t, &AdmissionRequestNS))
+	requestString := string(encodeRequest(t, &AdmissionRequestPodDisallow))
 	myr := strings.NewReader(requestString)
 	r, err := http.Post(server.URL, "application/json", myr)
 	if err != nil {
@@ -117,10 +142,9 @@ func TestServeReturnsCorrectJson(t *testing.T) {
 
 	review := decodeResponse(t, r.Body)
 
-	assert.Equal(t, review.Request.UID, AdmissionRequestNS.Request.UID)
-	assert.Equal(t, review.Response.Allowed, true)
+	assert.Equal(t, review.Request.UID, AdmissionRequestPod.Request.UID)
+	assert.Equal(t, false, review.Response.Allowed)
 }
-*/
 
 type MockConfiger struct {
 	cpu *resource.Quantity
@@ -132,7 +156,7 @@ func (c *MockConfiger) IsExcluded(nn NameNamespace) bool {
 }
 
 func (c *MockConfiger) GetResourceLimits() (cpu *resource.Quantity, mem *resource.Quantity) {
-	return cpu, mem
+	return c.cpu, c.mem
 }
 
 func (c *MockConfiger) GetMaxPVCSize() *resource.Quantity {

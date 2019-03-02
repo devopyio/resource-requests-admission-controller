@@ -25,9 +25,9 @@ import (
 var (
 	runtimeScheme = runtime.NewScheme()
 	codecs        = serializer.NewCodecFactory(runtimeScheme)
-	deserializer  = codecs.UniversalDeserializer()
+	_             = codecs.UniversalDeserializer()
 	// (https://github.com/kubernetes/kubernetes/issues/57982)
-	defaulter = runtime.ObjectDefaulter(runtimeScheme)
+	_ = runtime.ObjectDefaulter(runtimeScheme)
 
 	podIdRegex  = regexp.MustCompile("(.*)(-[0-9A-Za-z]{10}-[0-9A-Za-z]{5})")
 	podId2Regex = regexp.MustCompile("(.*)(-[0-9]+)")
