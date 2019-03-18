@@ -13,21 +13,16 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	ver "github.com/prometheus/common/version"
+	"github.com/prometheus/common/version"
 	log "github.com/sirupsen/logrus"
 )
 
-var (
-	version string
-)
-
 func main() {
-	ver.Version = version
-
 	app := kingpin.New("resource-requests-admission-controller", "Validates Statefulset,Deployment,Daemoneset,Pod resource requests and limits")
 
-	app.Version(ver.Print("resource-requests-admission-controller"))
+	app.Version(version.Print("resource-requests-admission-controller"))
 	app.HelpFlag.Short('h')
 
 	certFile := app.Flag("tls-cert-file", "").Envar("TLS_CERT_FILE").Required().String()
@@ -43,6 +38,8 @@ func main() {
 	opsAddr := app.Flag("ops-addr", "Server address which will serve prometheus metrics.").Envar("PROM_ADDR").Default("0.0.0.0:8090").String()
 
 	kingpin.MustParse(app.Parse(os.Args[1:]))
+
+	prometheus.MustRegister(version.NewCollector("rrac"))
 
 	switch strings.ToLower(*logLevel) {
 	case "error":

@@ -13,11 +13,11 @@ RUN mv resource-requests-admission-controller /resource-requests-admission-contr
 FROM alpine:latest
 
 RUN apk add --no-cache ca-certificates && mkdir /app
-RUN adduser rrac -u 1001 -g 1001 -s /bin/false -D rrac
+RUN adduser app -u 1001 -g 1001 -s /bin/false -D app
 
 COPY --from=build /resource-requests-admission-controller /usr/bin
-RUN chown -R rrac /usr/bin/resource-requests-admission-controller
+RUN chown -R app /usr/bin/resource-requests-admission-controller
 
-USER rrac
+USER app
 ENTRYPOINT ["/usr/bin/resource-requests-admission-controller"]
 
