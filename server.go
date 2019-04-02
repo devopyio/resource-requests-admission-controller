@@ -11,15 +11,18 @@ import (
 	"k8s.io/apimachinery/pkg/util/json"
 )
 
+// AdmissionController makes admission decisions
 type AdmissionController interface {
 	HandleAdmission(review *v1beta1.AdmissionRequest) (*v1beta1.AdmissionResponse, error)
 }
 
+// AdmissionControllerServer is an HTTP server which unmarshals json and passes to AdmissionController
 type AdmissionControllerServer struct {
 	AdmissionController AdmissionController
 	Decoder             runtime.Decoder
 }
 
+// ServeHTTP serves HTTP request
 func (acs *AdmissionControllerServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var body []byte
 	if data, err := ioutil.ReadAll(r.Body); err == nil {
