@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+// Healthchecker checks admission controller health
 type Healthchecker struct {
 	port    string
 	client  *http.Client
@@ -42,6 +43,7 @@ var (
 	}
 )
 
+// NewHealhChecker creates New Healthchecker
 func NewHealhChecker(port string) (*Healthchecker, error) {
 	defaultTransport := http.DefaultTransport.(*http.Transport)
 
@@ -71,6 +73,7 @@ func NewHealhChecker(port string) (*Healthchecker, error) {
 	}, nil
 }
 
+// ServeHTTP serves HTTP request
 func (hc *Healthchecker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resp, err := hc.client.Post("https://localhost:"+hc.port, "application/json", bytes.NewReader(hc.reqBody))
 	if err != nil {
