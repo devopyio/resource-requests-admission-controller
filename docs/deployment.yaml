@@ -5,18 +5,30 @@ metadata:
   namespace: kube-system
 data:
   config.yaml: |-
-    excludedNamespaces:
-    - kube-system
-    - sys-mon
-    - sys-ingress
-    excludedNames:
-    - name: shell123
-      namespace: mynamespace
-    - name: shell1235
-      namespace: mynamespace
     maxCPULimit: 2
     maxMemLimit: 2Gi
-    maxPvcSize: 50Gi
+    maxPVCSize: 50Gi
+    customNamespaces:
+      kube-system:
+        # maxMemLimit and maxPVCSize is taken from top level declaration
+        maxCPULimit: 1
+      monitoring:
+        # maxCPULimit and maxPVCSize is taken from top level declaration
+        maxMemLimit: 1Gi
+      default:
+        # everything is unlimited.
+        unlimited: true
+      test-namespace:
+        # everything is custom.
+        unlimited: false
+        maxCPULimit: 1
+        maxMemLimit: 1Gi
+        maxPVCSize: 10Gi
+    customNames:
+      {name: deployment-name, namespace: test-namespace}:
+        maxPVCSize: 15Gi
+        maxMemLimit: 5Gi
+        maxCPULimit: 2
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -36,7 +48,7 @@ spec:
         app: resource-requests-controller
     spec:
       containers:
-      - image: devopyio/resource-requests-admission-controller:b91e4eaf32e4246562e3281275254226f77412ca
+      - image: devopyio/resource-requests-admission-controller:v1.1.0
         name: resource-requests-controller
         env:
         - name: TLS_CERT_FILE
