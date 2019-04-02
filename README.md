@@ -40,6 +40,11 @@ data:
         maxCPULimit: 1
         maxMemLimit: 1Gi
         maxPVCSize: 10Gi
+    customNames:
+      {name: deployment-name, namespace: test-namespace}:
+        maxPVCSize: 15Gi
+        maxMemLimit: 5Gi
+        maxCPULimit: 2
 ```
 
 # Deployment
