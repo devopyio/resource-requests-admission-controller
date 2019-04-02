@@ -54,14 +54,18 @@ const (
 	pvcKind         = "PersistentVolumeClaim"
 )
 
+// Conf get configuration intercace
 type Conf interface {
 	GetPodLimit(nn NameNamespace) (cpu, mem *resource.Quantity, unlimited bool)
 	GetMaxPVCSize(nn NameNamespace) (pvc *resource.Quantity, unlimited bool)
 }
+
+// ResourceRequestsAdmission handles admission based on resourcer returned by Conf
 type ResourceRequestsAdmission struct {
 	conf Conf
 }
 
+// New Creates new ResourceRequestsAdmission
 func New(conf Conf) *ResourceRequestsAdmission {
 	admissionCounter.WithLabelValues("true")
 	admissionCounter.WithLabelValues("false")
@@ -71,6 +75,7 @@ func New(conf Conf) *ResourceRequestsAdmission {
 	}
 }
 
+// HandleAdmission handles admission request and denies if limits < resources requests
 func (rra *ResourceRequestsAdmission) HandleAdmission(req *v1beta1.AdmissionRequest) (*v1beta1.AdmissionResponse, error) {
 	resp, err := rra.handleAdmission(req)
 	if err != nil {
