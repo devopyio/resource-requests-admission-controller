@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin"
+	"github.com/povilasv/prommod"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/version"
@@ -40,6 +41,7 @@ func main() {
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	prometheus.MustRegister(version.NewCollector("rrac"))
+	prometheus.MustRegister(prommod.NewCollector("rrac"))
 
 	switch strings.ToLower(*logLevel) {
 	case "error":

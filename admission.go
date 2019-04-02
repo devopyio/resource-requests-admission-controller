@@ -55,9 +55,8 @@ const (
 )
 
 type Conf interface {
-	GetResourceLimits() (cpu *resource.Quantity, mem *resource.Quantity)
-	GetMaxPVCSize() *resource.Quantity
-	IsExcluded(nn NameNamespace) bool
+	GetPodLimit(nn NameNamespace) (cpu, mem *resource.Quantity, unlimited bool)
+	GetMaxPVCSize(nn NameNamespace) (pvc *resource.Quantity, unlimited bool)
 }
 type ResourceRequestsAdmission struct {
 	conf Conf
@@ -117,133 +116,153 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			}
 		}
 
-		if ok := rra.conf.IsExcluded(NameNamespace{
+		cpu, mem, unlimited := rra.conf.GetPodLimit(NameNamespace{
 			Name:      name,
 			Namespace: req.Namespace,
-		}); ok {
+		})
+		if unlimited {
 			return resp, nil
 		}
 
-		if denyResp := rra.validatePodSpec(req, pod.Spec); denyResp != nil {
+		if denyResp := rra.validatePodSpec(req, pod.Spec, cpu, mem); denyResp != nil {
 			log.Infof("denying request for pod name: %s, namespace: %s, userInfo: %v", name, req.Namespace, req.UserInfo)
 			return denyResp, nil
 		}
+
+		return resp, nil
 	case deploymentKind:
 		var deployment appsv1.Deployment
 		if err := json.Unmarshal(req.Object.Raw, &deployment); err != nil {
 			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
 		}
 
-		if ok := rra.conf.IsExcluded(NameNamespace{
+		cpu, mem, unlimited := rra.conf.GetPodLimit(NameNamespace{
 			Name:      deployment.Name,
 			Namespace: req.Namespace,
-		}); ok {
+		})
+		if unlimited {
 			return resp, nil
 		}
 
-		if denyResp := rra.validatePodSpec(req, deployment.Spec.Template.Spec); denyResp != nil {
+		if denyResp := rra.validatePodSpec(req, deployment.Spec.Template.Spec, cpu, mem); denyResp != nil {
 			log.Infof("denying request for deployment name: %s, namespace: %s, userInfo: %v", deployment.Name, req.Namespace, req.UserInfo)
 			return denyResp, nil
 		}
+
+		return resp, nil
 	case statefulsetKind:
 		var sts appsv1.StatefulSet
 		if err := json.Unmarshal(req.Object.Raw, &sts); err != nil {
 			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
 		}
 
-		if ok := rra.conf.IsExcluded(NameNamespace{
+		cpu, mem, unlimited := rra.conf.GetPodLimit(NameNamespace{
 			Name:      sts.Name,
 			Namespace: req.Namespace,
-		}); ok {
+		})
+		if unlimited {
 			return resp, nil
 		}
 
-		if denyResp := rra.validatePodSpec(req, sts.Spec.Template.Spec); denyResp != nil {
+		if denyResp := rra.validatePodSpec(req, sts.Spec.Template.Spec, cpu, mem); denyResp != nil {
 			log.Infof("denying request for statefulset name: %s, namespace: %s, userInfo: %v", sts.Name, req.Namespace, req.UserInfo)
 			return denyResp, nil
 		}
+
+		return resp, nil
 	case daemonsetKind:
 		var ds appsv1.DaemonSet
 		if err := json.Unmarshal(req.Object.Raw, &ds); err != nil {
 			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
 		}
 
-		if ok := rra.conf.IsExcluded(NameNamespace{
+		cpu, mem, unlimited := rra.conf.GetPodLimit(NameNamespace{
 			Name:      ds.Name,
 			Namespace: req.Namespace,
-		}); ok {
+		})
+		if unlimited {
 			return resp, nil
 		}
 
-		if denyResp := rra.validatePodSpec(req, ds.Spec.Template.Spec); denyResp != nil {
+		if denyResp := rra.validatePodSpec(req, ds.Spec.Template.Spec, cpu, mem); denyResp != nil {
 			log.Infof("denying request for daemonset name: %s, namespace: %s, userInfo: %v", ds.Name, req.Namespace, req.UserInfo)
 			return denyResp, nil
 		}
 
+		return resp, nil
 	case cronJobKind:
 		var cj batchv1beta1.CronJob
 		if err := json.Unmarshal(req.Object.Raw, &cj); err != nil {
 			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
 		}
 
-		if ok := rra.conf.IsExcluded(NameNamespace{
+		cpu, mem, unlimited := rra.conf.GetPodLimit(NameNamespace{
 			Name:      cj.Name,
 			Namespace: req.Namespace,
-		}); ok {
+		})
+		if unlimited {
 			return resp, nil
 		}
 
-		if denyResp := rra.validatePodSpec(req, cj.Spec.JobTemplate.Spec.Template.Spec); denyResp != nil {
+		if denyResp := rra.validatePodSpec(req, cj.Spec.JobTemplate.Spec.Template.Spec, cpu, mem); denyResp != nil {
 			log.Infof("denying request for daemonset name: %s, namespace: %s, userInfo: %v", cj.Name, req.Namespace, req.UserInfo)
 			return denyResp, nil
 		}
+
+		return resp, nil
 	case jobKind:
 		var j batchv1.Job
 		if err := json.Unmarshal(req.Object.Raw, &j); err != nil {
 			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
 		}
 
-		if ok := rra.conf.IsExcluded(NameNamespace{
+		cpu, mem, unlimited := rra.conf.GetPodLimit(NameNamespace{
 			Name:      j.Name,
 			Namespace: req.Namespace,
-		}); ok {
+		})
+		if unlimited {
 			return resp, nil
 		}
 
-		if denyResp := rra.validatePodSpec(req, j.Spec.Template.Spec); denyResp != nil {
+		if denyResp := rra.validatePodSpec(req, j.Spec.Template.Spec, cpu, mem); denyResp != nil {
 			log.Infof("denying request for daemonset name: %s, namespace: %s, userInfo: %v", j.Name, req.Namespace, req.UserInfo)
 			return denyResp, nil
 		}
+
+		return resp, nil
 	case pvcKind:
 		var pvc corev1.PersistentVolumeClaim
 		if err := json.Unmarshal(req.Object.Raw, &pvc); err != nil {
 			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
 		}
 
-		if ok := rra.conf.IsExcluded(NameNamespace{
+		maxSize, unlimited := rra.conf.GetMaxPVCSize(NameNamespace{
 			Name:      pvc.Name,
 			Namespace: req.Namespace,
-		}); ok {
+		})
+		if unlimited {
 			return resp, nil
 		}
 
 		vSize, ok := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
 		if !ok {
-			return resp, nil
-		}
-
-		maxSize := rra.conf.GetMaxPVCSize()
-		if maxSize == nil {
-			return resp, nil
-		}
-		if vSize.Cmp(*maxSize) > 0 {
-
 			log.Infof("denying request for pvc name: %s, namespace: %s, userInfo: %v", pvc.Name, req.Namespace, req.UserInfo)
 			return &v1beta1.AdmissionResponse{
 				UID:     req.UID,
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: fmt.Sprintf("error persistentVolumeClaim %s size is %s > %s", pvc.Name, vSize.String(), maxSize),
+					Message: fmt.Sprintf("error persistentVolumeClaim %s size is empty", pvc.Name),
+				},
+			}, nil
+		}
+
+		if vSize.Cmp(*maxSize) > 0 {
+			log.Infof("denying request for pvc name: %s, namespace: %s, userInfo: %v", pvc.Name, req.Namespace, req.UserInfo)
+			return &v1beta1.AdmissionResponse{
+				UID:     req.UID,
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: fmt.Sprintf("error persistentVolumeClaim %s size is %s > %s", pvc.Name, vSize.String(), maxSize.String()),
 				},
 			}, nil
 		}
@@ -252,7 +271,7 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 	return resp, nil
 }
 
-func (rra *ResourceRequestsAdmission) validatePodSpec(req *v1beta1.AdmissionRequest, podSpec corev1.PodSpec) *v1beta1.AdmissionResponse {
+func (rra *ResourceRequestsAdmission) validatePodSpec(req *v1beta1.AdmissionRequest, podSpec corev1.PodSpec, cpuLimit, memLimit *resource.Quantity) *v1beta1.AdmissionResponse {
 	for _, container := range podSpec.Containers {
 		if _, ok := container.Resources.Requests[corev1.ResourceCPU]; !ok {
 			return &v1beta1.AdmissionResponse{
@@ -293,7 +312,6 @@ func (rra *ResourceRequestsAdmission) validatePodSpec(req *v1beta1.AdmissionRequ
 			}
 		}
 
-		cpuLimit, memLimit := rra.conf.GetResourceLimits()
 		if cpuLimit != nil && container.Resources.Limits.Cpu().Cmp(*cpuLimit) > 0 {
 			return &v1beta1.AdmissionResponse{
 				UID:     req.UID,

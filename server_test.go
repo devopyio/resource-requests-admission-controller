@@ -146,21 +146,42 @@ func TestServePodOverLimitReturnsCorrectJson(t *testing.T) {
 	assert.Equal(t, false, review.Response.Allowed)
 }
 
+func TestServePodUnlimitedReturnsCorrectJson(t *testing.T) {
+	conf := &MockConfiger{
+		unlimited: true,
+	}
+	rra := &ResourceRequestsAdmission{conf}
+	server := httptest.NewServer(&AdmissionControllerServer{
+		AdmissionController: rra,
+		Decoder:             codecs.UniversalDeserializer(),
+	})
+
+	requestString := string(encodeRequest(t, &AdmissionRequestPodDisallow))
+	myr := strings.NewReader(requestString)
+	r, err := http.Post(server.URL, "application/json", myr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	review := decodeResponse(t, r.Body)
+
+	assert.Equal(t, review.Request.UID, AdmissionRequestPod.Request.UID)
+	assert.Equal(t, true, review.Response.Allowed)
+}
+
 type MockConfiger struct {
-	cpu *resource.Quantity
-	mem *resource.Quantity
+	cpu       *resource.Quantity
+	mem       *resource.Quantity
+	pvcSize   *resource.Quantity
+	unlimited bool
 }
 
-func (c *MockConfiger) IsExcluded(nn NameNamespace) bool {
-	return false
+func (mc *MockConfiger) GetPodLimit(nn NameNamespace) (cpu, mem *resource.Quantity, unlimited bool) {
+	return mc.cpu, mc.mem, mc.unlimited
 }
 
-func (c *MockConfiger) GetResourceLimits() (cpu *resource.Quantity, mem *resource.Quantity) {
-	return c.cpu, c.mem
-}
-
-func (c *MockConfiger) GetMaxPVCSize() *resource.Quantity {
-	return nil
+func (mc *MockConfiger) GetMaxPVCSize(nn NameNamespace) (pvc *resource.Quantity, unlimited bool) {
+	return mc.pvcSize, mc.unlimited
 }
 
 func TestCompareMemoryQuantity(t *testing.T) {
