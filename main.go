@@ -62,7 +62,7 @@ func main() {
 	}
 	log.SetOutput(os.Stdout)
 
-	configer, err := NewConfiger(*configFile, *refreshInterval)
+	configer, err := NewConfigurer(*configFile, *refreshInterval)
 	if err != nil {
 		log.WithError(err).Fatalf("unable to load config file: %s", *configFile)
 	}

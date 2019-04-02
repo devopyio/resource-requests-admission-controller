@@ -19,15 +19,18 @@ var (
 	reloadErrorsCounter = promauto.NewCounter(prometheus.CounterOpts{Name: "reload_errors_total"})
 )
 
+// NameNamespace name + namespace combination, strings might be empty
 type NameNamespace struct {
 	Name      string `json:"name" yaml:"name"`
 	Namespace string `json:"namespace" yaml:"namespace"`
 }
 
+// String nicely formats name and namespace
 func (nn NameNamespace) String() string {
 	return "Name: " + nn.Name + ", " + nn.Namespace
 }
 
+// Limit describes limit configuration in yaml
 type Limit struct {
 	CPULimit  string `yaml:"cpuLimit" json:"cpuLimit"`
 	MemLimit  string `yaml:"memLimit" json:"memLimit"`
@@ -44,6 +47,7 @@ type Config struct {
 	MaxPvcSize  string                  `yaml:"maxPvcSize" json:"maxPvcSize"`
 }
 
+// LimitResource resource limits
 type LimitResource struct {
 	CPULimit  *resource.Quantity
 	MemLimit  *resource.Quantity
@@ -51,8 +55,8 @@ type LimitResource struct {
 	Unlimited bool
 }
 
-// Config
-type Configer struct {
+// Configurer configures resource limits
+type Configurer struct {
 	filePath        string
 	refreshInterval time.Duration
 	w               *fsnotify.Watcher
@@ -65,8 +69,8 @@ type Configer struct {
 	m                  sync.RWMutex
 }
 
-// NewConfiger returns new Limits Configurer
-func NewConfiger(filePath string, refreshInterval time.Duration) (*Configer, error) {
+// NewConfigurer returns new Limits Configurer
+func NewConfigurer(filePath string, refreshInterval time.Duration) (*Configurer, error) {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
@@ -75,7 +79,7 @@ func NewConfiger(filePath string, refreshInterval time.Duration) (*Configer, err
 		return nil, err
 	}
 
-	c := &Configer{
+	c := &Configurer{
 		filePath:           filePath,
 		w:                  w,
 		refreshInterval:    refreshInterval,
@@ -92,7 +96,8 @@ func NewConfiger(filePath string, refreshInterval time.Duration) (*Configer, err
 	return c, nil
 }
 
-func (c *Configer) load() error {
+// load loads configuration
+func (c *Configurer) load() error {
 	configFile, err := ioutil.ReadFile(c.filePath)
 	if err != nil {
 		return errors.Wrap(err, "unable to read file")
@@ -216,7 +221,7 @@ func (c *Configer) load() error {
 }
 
 // GetPodLimit gets pod CPU and memory limit from configmap.
-func (c *Configer) GetPodLimit(nn NameNamespace) (cpu, mem *resource.Quantity, unlimited bool) {
+func (c *Configurer) GetPodLimit(nn NameNamespace) (cpu, mem *resource.Quantity, unlimited bool) {
 	c.m.RLock()
 	defer c.m.RUnlock()
 	if limit, ok := c.excludedNamespaces[nn.Namespace]; ok {
@@ -263,7 +268,7 @@ func (c *Configer) GetPodLimit(nn NameNamespace) (cpu, mem *resource.Quantity, u
 }
 
 // GetMaxPVCSize returns PVC limit
-func (c *Configer) GetMaxPVCSize(nn NameNamespace) (pvc *resource.Quantity, unlimited bool) {
+func (c *Configurer) GetMaxPVCSize(nn NameNamespace) (pvc *resource.Quantity, unlimited bool) {
 	c.m.RLock()
 	defer c.m.RUnlock()
 
@@ -297,7 +302,8 @@ func (c *Configer) GetMaxPVCSize(nn NameNamespace) (pvc *resource.Quantity, unli
 	return pvc, false
 }
 
-func (c *Configer) Watch() {
+// Watch starts the watching of filepath changes and reloads configuration.
+func (c *Configurer) Watch() {
 	tick := time.NewTicker(c.refreshInterval)
 	defer tick.Stop()
 
@@ -323,6 +329,7 @@ func (c *Configer) Watch() {
 	}
 }
 
-func (c *Configer) Close() error {
+// Close stop the inotify watching
+func (c *Configurer) Close() error {
 	return c.w.Close()
 }
