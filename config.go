@@ -32,26 +32,26 @@ func (nn NameNamespace) String() string {
 
 // Limit describes limit configuration in yaml
 type Limit struct {
-	CPULimit  string `yaml:"cpuLimit" json:"cpuLimit"`
-	MemLimit  string `yaml:"memLimit" json:"memLimit"`
-	PvcLimit  string `yaml:"pvcLimit" json:"pvcLimit"`
+	CPULimit  string `yaml:"maxCPULimit" json:"maxCPULimit"`
+	MemLimit  string `yaml:"maxMemLimit" json:"maxMemLimit"`
+	PVCSize   string `yaml:"maxPVCSize" json:"maxPVCSize"`
 	Unlimited bool   `yaml:"unlimited" json:"unlimited"`
 }
 
 // Config describes Config files structure
 type Config struct {
-	Namespaces  map[string]Limit        `yaml:"excludedNamespaces" json:"namespaces"`
-	Names       map[NameNamespace]Limit `yaml:"excludedNames" json:"names"`
+	Namespaces  map[string]Limit        `yaml:"customNamespaces" json:"namespaces"`
+	Names       map[NameNamespace]Limit `yaml:"customNames" json:"names"`
 	MaxCPULimit string                  `yaml:"maxCPULimit" json:"maxCPULimit"`
 	MaxMemLimit string                  `yaml:"maxMemLimit" json:"maxMemLimit"`
-	MaxPvcSize  string                  `yaml:"maxPvcSize" json:"maxPvcSize"`
+	MaxPvcSize  string                  `yaml:"maxPVCSize" json:"maxPVCSize"`
 }
 
 // LimitResource resource limits
 type LimitResource struct {
 	CPULimit  *resource.Quantity
 	MemLimit  *resource.Quantity
-	PVCLimit  *resource.Quantity
+	PVCSize   *resource.Quantity
 	Unlimited bool
 }
 
@@ -94,6 +94,53 @@ func NewConfigurer(filePath string, refreshInterval time.Duration) (*Configurer,
 	go c.Watch()
 
 	return c, nil
+}
+
+func (c *Configurer) convertLimitsToResources(limit Limit) (*LimitResource, error) {
+	var cpu, mem, pvc *resource.Quantity
+	switch {
+	case limit.CPULimit != "":
+		q, err := resource.ParseQuantity(limit.CPULimit)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not parse CPULimit")
+		}
+		cpu = &q
+	case c.maxCPULimit != nil:
+		q := c.maxCPULimit.DeepCopy()
+		cpu = &q
+	}
+
+	switch {
+	case limit.MemLimit != "":
+		q, err := resource.ParseQuantity(limit.MemLimit)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not parse MemLimit")
+		}
+
+		mem = &q
+	case c.maxMemLimit != nil:
+		q := c.maxMemLimit.DeepCopy()
+		mem = &q
+	}
+
+	switch {
+	case limit.PVCSize != "":
+		q, err := resource.ParseQuantity(limit.PVCSize)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not parse PVCSize")
+		}
+		pvc = &q
+	case c.maxPvcSize != nil:
+		q := c.maxPvcSize.DeepCopy()
+		pvc = &q
+	}
+
+	return &LimitResource{
+		CPULimit:  cpu,
+		MemLimit:  mem,
+		PVCSize:   pvc,
+		Unlimited: limit.Unlimited,
+	}, nil
 }
 
 // load loads configuration
@@ -139,81 +186,21 @@ func (c *Configurer) load() error {
 	c.excludedNamespaces = make(map[string]LimitResource)
 	c.excludedNames = make(map[NameNamespace]LimitResource)
 	for ns, limit := range config.Namespaces {
-		var (
-			cpu *resource.Quantity
-			mem *resource.Quantity
-			pvc *resource.Quantity
-		)
-		if limit.CPULimit != "" {
-			q, err := resource.ParseQuantity(limit.CPULimit)
-			if err != nil {
-				return errors.Wrapf(err, "could not parse CPULimit for ns %s ", ns)
-			}
-			cpu = &q
+		rLimit, err := c.convertLimitsToResources(limit)
+		if err != nil {
+			return errors.Wrapf(err, "namespace: %s", ns)
 		}
 
-		if limit.MemLimit != "" {
-			q, err := resource.ParseQuantity(limit.MemLimit)
-			if err != nil {
-				return errors.Wrapf(err, "could not parse MemLimit for ns %s ", ns)
-			}
-
-			mem = &q
-		}
-
-		if limit.PvcLimit != "" {
-			q, err := resource.ParseQuantity(limit.CPULimit)
-			if err != nil {
-				return errors.Wrapf(err, "could not parse CPULimit for ns %s ", ns)
-			}
-			pvc = &q
-		}
-
-		c.excludedNamespaces[ns] = LimitResource{
-			CPULimit:  cpu,
-			MemLimit:  mem,
-			PVCLimit:  pvc,
-			Unlimited: limit.Unlimited,
-		}
+		c.excludedNamespaces[ns] = *rLimit
 	}
 
 	for nn, limit := range config.Names {
-		var (
-			cpu *resource.Quantity
-			mem *resource.Quantity
-			pvc *resource.Quantity
-		)
-		if limit.CPULimit != "" {
-			q, err := resource.ParseQuantity(limit.CPULimit)
-			if err != nil {
-				return errors.Wrapf(err, "could not parse CPULimit for nn: %s", nn)
-			}
-			cpu = &q
+		rLimit, err := c.convertLimitsToResources(limit)
+		if err != nil {
+			return errors.Wrapf(err, "nn: %s", nn)
 		}
 
-		if limit.MemLimit != "" {
-			q, err := resource.ParseQuantity(limit.MemLimit)
-			if err != nil {
-				return errors.Wrapf(err, "could not parse MemLimit for nn: %s", nn)
-			}
-
-			mem = &q
-		}
-
-		if limit.PvcLimit != "" {
-			q, err := resource.ParseQuantity(limit.CPULimit)
-			if err != nil {
-				return errors.Wrapf(err, "could not parse CPULimit for nn: %s", nn)
-			}
-			pvc = &q
-		}
-		c.excludedNames[nn] = LimitResource{
-			CPULimit:  cpu,
-			MemLimit:  mem,
-			PVCLimit:  pvc,
-			Unlimited: limit.Unlimited,
-		}
-
+		c.excludedNames[nn] = *rLimit
 	}
 
 	log.Infof("exluding namespaces: %v, names: %v, maxCPULimit: %v, maxMemLimit: %v, maxPvcSize: %v", config.Namespaces, config.Names, c.maxCPULimit, c.maxMemLimit, c.maxPvcSize)
@@ -224,21 +211,7 @@ func (c *Configurer) load() error {
 func (c *Configurer) GetPodLimit(nn NameNamespace) (cpu, mem *resource.Quantity, unlimited bool) {
 	c.m.RLock()
 	defer c.m.RUnlock()
-	if limit, ok := c.excludedNamespaces[nn.Namespace]; ok {
-		if limit.Unlimited {
-			return nil, nil, true
-		}
 
-		if limit.CPULimit != nil {
-			q := limit.CPULimit.DeepCopy()
-			cpu = &q
-		}
-		if limit.MemLimit != nil {
-			q := limit.MemLimit.DeepCopy()
-			mem = &q
-		}
-		return cpu, mem, false
-	}
 	if limit, ok := c.excludedNames[nn]; ok {
 		if limit.Unlimited {
 			return nil, nil, true
@@ -255,48 +228,66 @@ func (c *Configurer) GetPodLimit(nn NameNamespace) (cpu, mem *resource.Quantity,
 		return cpu, mem, false
 	}
 
+	if limit, ok := c.excludedNamespaces[nn.Namespace]; ok {
+		if limit.Unlimited {
+			return nil, nil, true
+		}
+
+		if limit.CPULimit != nil {
+			q := limit.CPULimit.DeepCopy()
+			cpu = &q
+		}
+
+		if limit.MemLimit != nil {
+			q := limit.MemLimit.DeepCopy()
+			mem = &q
+		}
+		return cpu, mem, false
+	}
 	if c.maxCPULimit != nil {
-		cpuCopy := c.maxCPULimit.DeepCopy()
-		cpu = &cpuCopy
+		q := c.maxCPULimit.DeepCopy()
+		cpu = &q
 	}
 	if c.maxMemLimit != nil {
-		memCopy := c.maxMemLimit.DeepCopy()
-		mem = &memCopy
+		q := c.maxMemLimit.DeepCopy()
+		mem = &q
 	}
 
-	return c.maxCPULimit, c.maxMemLimit, false
+	return cpu, mem, false
 }
 
-// GetMaxPVCSize returns PVC limit
+// GetMaxPVCSize returns PVC limit, might return nil if both maxPvcSize and custom pvc size is not set
 func (c *Configurer) GetMaxPVCSize(nn NameNamespace) (pvc *resource.Quantity, unlimited bool) {
 	c.m.RLock()
 	defer c.m.RUnlock()
 
-	if limit, ok := c.excludedNamespaces[nn.Namespace]; ok {
-		if limit.Unlimited {
-			return nil, true
-		}
-
-		if limit.PVCLimit != nil {
-			q := limit.PVCLimit.DeepCopy()
-			pvc = &q
-		}
-		return pvc, false
-	}
 	if limit, ok := c.excludedNames[nn]; ok {
 		if limit.Unlimited {
 			return nil, true
 		}
 
-		if limit.PVCLimit != nil {
-			q := limit.PVCLimit.DeepCopy()
+		if limit.PVCSize != nil {
+			q := limit.PVCSize.DeepCopy()
+			pvc = &q
+		}
+
+		return pvc, false
+	}
+
+	if limit, ok := c.excludedNamespaces[nn.Namespace]; ok {
+		if limit.Unlimited {
+			return nil, true
+		}
+
+		if limit.PVCSize != nil {
+			q := limit.PVCSize.DeepCopy()
 			pvc = &q
 		}
 		return pvc, false
 	}
 	if c.maxPvcSize != nil {
-		pvcCopy := c.maxPvcSize.DeepCopy()
-		pvc = &pvcCopy
+		q := c.maxPvcSize.DeepCopy()
+		pvc = &q
 	}
 
 	return pvc, false
@@ -315,7 +306,9 @@ func (c *Configurer) Watch() {
 				continue
 			}
 		case err := <-c.w.Errors:
-			log.WithError(err).Error("watch error")
+			if err != nil {
+				log.WithError(err).Error("watch error")
+			}
 			continue
 		}
 
