@@ -48,7 +48,7 @@ spec:
         app: resource-requests-controller
     spec:
       containers:
-      - image: devopyio/resource-requests-admission-controller:v1.1.0
+      - image: devopyio/resource-requests-admission-controller:v1.1.1
         name: resource-requests-controller
         env:
         - name: TLS_CERT_FILE
