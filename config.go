@@ -203,7 +203,7 @@ func (c *Configurer) load() error {
 		c.excludedNames[nn] = *rLimit
 	}
 
-	log.Infof("exluding namespaces: %v, names: %v, maxCPULimit: %v, maxMemLimit: %v, maxPvcSize: %v", config.Namespaces, config.Names, c.maxCPULimit, c.maxMemLimit, c.maxPvcSize)
+	log.Debugf("exluding namespaces: %v, names: %v, maxCPULimit: %v, maxMemLimit: %v, maxPvcSize: %v", config.Namespaces, config.Names, c.maxCPULimit, c.maxMemLimit, c.maxPvcSize)
 	return nil
 }
 
