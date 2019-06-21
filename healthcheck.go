@@ -21,27 +21,25 @@ type Healthchecker struct {
 	reqBody []byte
 }
 
-var (
-	req = v1beta1.AdmissionReview{
-		TypeMeta: v1.TypeMeta{
-			Kind: "AdmissionReview",
+var req = v1beta1.AdmissionReview{
+	TypeMeta: v1.TypeMeta{
+		Kind: "AdmissionReview",
+	},
+	Request: &v1beta1.AdmissionRequest{
+		UID: "e911857d-c318-11e8-bbad-025000000001",
+		Kind: v1.GroupVersionKind{
+			Kind: "Pod",
 		},
-		Request: &v1beta1.AdmissionRequest{
-			UID: "e911857d-c318-11e8-bbad-025000000001",
-			Kind: v1.GroupVersionKind{
-				Kind: "Pod",
-			},
-			Operation: "CREATE",
-			Object: runtime.RawExtension{
-				Raw: []byte(`{"metadata": {
+		Operation: "CREATE",
+		Object: runtime.RawExtension{
+			Raw: []byte(`{"metadata": {
         						"name": "test",
         						"uid": "e911857d-c318-11e8-bbad-025000000001",
 						        "creationTimestamp": "2018-09-28T12:20:39Z"
       						}}`),
-			},
 		},
-	}
-)
+	},
+}
 
 // NewHealhChecker creates New Healthchecker
 func NewHealhChecker(port string) (*Healthchecker, error) {
@@ -82,6 +80,7 @@ func (hc *Healthchecker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.WithError(err).Warn("could not write error response")
 		}
+		return
 	}
 	defer resp.Body.Close()
 
@@ -92,6 +91,8 @@ func (hc *Healthchecker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.WithError(err).Warn("could not write error response")
 		}
+
+		return
 	}
 
 	review := &v1beta1.AdmissionReview{}
@@ -103,6 +104,7 @@ func (hc *Healthchecker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			log.WithError(err).Warn("could not write error response")
 		}
 
+		return
 	}
 
 	if !review.Response.Allowed {
@@ -112,6 +114,7 @@ func (hc *Healthchecker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			log.WithError(err).Warn("could not write error response")
 		}
 
+		return
 	}
 
 	w.WriteHeader(http.StatusOK)
