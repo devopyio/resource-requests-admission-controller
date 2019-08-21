@@ -30,7 +30,7 @@ var (
 	_ = runtime.ObjectDefaulter(runtimeScheme)
 
 	podIdRegex  = regexp.MustCompile("(.*)(-[0-9A-Za-z]{10}-[0-9A-Za-z]{5})")
-	podId2Regex = regexp.MustCompile("(.*)(-[0-9]+)")
+	podId2Regex = regexp.MustCompile("(.*)(-[0-9A-Za-z]+)")
 
 	admissionCounter = promauto.NewCounterVec(prometheus.CounterOpts{Name: "admission_requests_total"}, []string{"allowed"})
 	errorsCounter    = promauto.NewCounter(prometheus.CounterOpts{Name: "errors_total"})
