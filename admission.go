@@ -116,7 +116,7 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			name = match[1]
 		} else {
 			match := podID2Regex.FindStringSubmatch(name)
-			if len(match) == 3 {
+			if len(match) == 2 {
 				name = match[1]
 			}
 		}
