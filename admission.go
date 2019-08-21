@@ -29,8 +29,8 @@ var (
 	// (https://github.com/kubernetes/kubernetes/issues/57982)
 	_ = runtime.ObjectDefaulter(runtimeScheme)
 
-	podIdRegex  = regexp.MustCompile("(.*)(-[0-9A-Za-z]{10}-[0-9A-Za-z]{5})")
-	podId2Regex = regexp.MustCompile("(.*)(-[0-9A-Za-z]+)")
+	podIDRegex  = regexp.MustCompile("(.*)(-[0-9A-Za-z]{10}-[0-9A-Za-z]{5})")
+	podID2Regex = regexp.MustCompile("(.*)(-[0-9A-Za-z]+)")
 
 	admissionCounter = promauto.NewCounterVec(prometheus.CounterOpts{Name: "admission_requests_total"}, []string{"allowed"})
 	errorsCounter    = promauto.NewCounter(prometheus.CounterOpts{Name: "errors_total"})
@@ -111,11 +111,11 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 		}
 
 		name := pod.Name
-		match := podIdRegex.FindStringSubmatch(name)
+		match := podIDRegex.FindStringSubmatch(name)
 		if len(match) == 3 {
 			name = match[1]
 		} else {
-			match := podId2Regex.FindStringSubmatch(name)
+			match := podID2Regex.FindStringSubmatch(name)
 			if len(match) == 3 {
 				name = match[1]
 			}
