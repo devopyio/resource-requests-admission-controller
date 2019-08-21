@@ -29,7 +29,7 @@ var (
 	// (https://github.com/kubernetes/kubernetes/issues/57982)
 	_ = runtime.ObjectDefaulter(runtimeScheme)
 
-	podIDRegex  = regexp.MustCompile("(.*)(-[0-9A-Za-z]{10}-[0-9A-Za-z]{5})")
+	podIDRegex  = regexp.MustCompile("(.*)(-[0-9A-Za-z]+-[0-9A-Za-z]+)")
 	podID2Regex = regexp.MustCompile("(.*)(-[0-9A-Za-z]+)")
 
 	admissionCounter = promauto.NewCounterVec(prometheus.CounterOpts{Name: "admission_requests_total"}, []string{"allowed"})
