@@ -79,7 +79,7 @@ func main() {
 		log.WithError(err).Fatal("unable to parse address")
 	}
 
-	hc, err := NewHealhChecker(port)
+	hc, err := NewHealthChecker(port)
 	if err != nil {
 		log.WithError(err).Fatal("unable to create healthcheck")
 	}

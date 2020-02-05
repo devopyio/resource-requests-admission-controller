@@ -21,10 +21,10 @@ func TestConfigGetKubeSystem(t *testing.T) {
 	})
 
 	assert.Equal(t, false, unlimited)
-	//Value is in bytes, expected Limit 50Gb
+	// Value is in bytes, expected Limit 50Gb
 	assert.Equal(t, int64(50*1024*1024*1024), pvc.Value())
 
-	cpu, mem, unlimited := configer.GetPodLimit(NameNamespace{
+	cpu, mem, cpuRequest, memRequest, unlimited := configer.GetPodLimit(NameNamespace{
 		Name:      "",
 		Namespace: "kube-system",
 	})
@@ -32,6 +32,9 @@ func TestConfigGetKubeSystem(t *testing.T) {
 	assert.Equal(t, false, unlimited)
 	assert.Equal(t, int64(1), cpu.Value())
 	assert.Equal(t, int64(2*1024*1024*1024), mem.Value())
+
+	assert.Equal(t, int64(500), cpuRequest.MilliValue())
+	assert.Equal(t, int64(1*1024*1024*1024), memRequest.Value())
 }
 
 func TestConfigGetMonitoring(t *testing.T) {
@@ -48,17 +51,20 @@ func TestConfigGetMonitoring(t *testing.T) {
 	})
 
 	assert.Equal(t, false, unlimited)
-	//Value is in bytes, expected Limit 50Gb
+	// Value is in bytes, expected Limit 50Gb
 	assert.Equal(t, int64(50*1024*1024*1024), pvc.Value())
 
-	cpu, mem, unlimited := configer.GetPodLimit(NameNamespace{
+	cpu, mem, cpuRequest, memRequest, unlimited := configer.GetPodLimit(NameNamespace{
 		Name:      "",
 		Namespace: "monitoring",
 	})
 
 	assert.Equal(t, false, unlimited)
 	assert.Equal(t, int64(2), cpu.Value())
-	assert.Equal(t, int64(1*1024*1024*1024), mem.Value())
+	assert.Equal(t, int64(3*1024*1024*1024), mem.Value())
+
+	assert.Equal(t, int64(1), cpuRequest.Value())
+	assert.Equal(t, int64(3*1024*1024*1024), memRequest.Value())
 }
 
 func TestConfigGetDefault(t *testing.T) {
@@ -77,7 +83,7 @@ func TestConfigGetDefault(t *testing.T) {
 	assert.Equal(t, true, unlimited)
 	assert.Nil(t, pvc)
 
-	cpu, mem, unlimited := configer.GetPodLimit(NameNamespace{
+	cpu, mem, cpuRequest, memRequest, unlimited := configer.GetPodLimit(NameNamespace{
 		Name:      "",
 		Namespace: "default",
 	})
@@ -85,6 +91,9 @@ func TestConfigGetDefault(t *testing.T) {
 	assert.Equal(t, true, unlimited)
 	assert.Nil(t, cpu)
 	assert.Nil(t, mem)
+
+	assert.Nil(t, cpuRequest)
+	assert.Nil(t, memRequest)
 }
 
 func TestConfigGetTestNamespace(t *testing.T) {
@@ -103,7 +112,7 @@ func TestConfigGetTestNamespace(t *testing.T) {
 	assert.Equal(t, false, unlimited)
 	assert.Equal(t, int64(10*1024*1024*1024), pvc.Value())
 
-	cpu, mem, unlimited := configer.GetPodLimit(NameNamespace{
+	cpu, mem, cpuRequest, memRequest, unlimited := configer.GetPodLimit(NameNamespace{
 		Name:      "",
 		Namespace: "test-namespace",
 	})
@@ -111,6 +120,8 @@ func TestConfigGetTestNamespace(t *testing.T) {
 	assert.Equal(t, false, unlimited)
 	assert.Equal(t, int64(1), cpu.Value())
 	assert.Equal(t, int64(1*1024*1024*1024), mem.Value())
+	assert.Equal(t, int64(500), cpuRequest.MilliValue())
+	assert.Equal(t, int64(500*1024*1024), memRequest.Value())
 }
 
 func TestConfigGetTestPod(t *testing.T) {
@@ -129,12 +140,14 @@ func TestConfigGetTestPod(t *testing.T) {
 	assert.Equal(t, false, unlimited)
 	assert.Equal(t, int64(15*1024*1024*1024), pvc.Value())
 
-	cpu, mem, unlimited := configer.GetPodLimit(NameNamespace{
+	cpu, mem, cpuRequest, memRequest, unlimited := configer.GetPodLimit(NameNamespace{
 		Name:      "deployment-name",
 		Namespace: "test-namespace",
 	})
 
 	assert.Equal(t, false, unlimited)
-	assert.Equal(t, int64(2), cpu.Value())
+	assert.Equal(t, int64(3), cpu.Value())
 	assert.Equal(t, int64(5*1024*1024*1024), mem.Value())
+	assert.Equal(t, int64(2), cpuRequest.Value())
+	assert.Equal(t, int64(3*1024*1024*1024), memRequest.Value())
 }

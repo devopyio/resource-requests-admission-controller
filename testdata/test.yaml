@@ -1,13 +1,17 @@
 maxCPULimit: 2
 maxMemLimit: 2Gi
 maxPVCSize: 50Gi
+maxCPURequest: 1
+maxMemRequest: 1Gi
 customNamespaces:
   kube-system:
     # maxMemLimit and maxPVCSize is taken from top level declaration
     maxCPULimit: 1
+    maxCPURequest: 0.5
   monitoring:
     # maxCPULimit and maxPVCSize is taken from top level declaration
-    maxMemLimit: 1Gi
+    maxMemLimit: 3Gi
+    maxMemRequest: 3Gi
   default:
     # everything is unlimited.
     unlimited: true
@@ -16,10 +20,15 @@ customNamespaces:
     unlimited: false
     maxCPULimit: 1
     maxMemLimit: 1Gi
+    maxCPURequest: 0.5
+    maxMemRequest: 500Mi
     maxPVCSize: 10Gi
 
 customNames:
   {name: deployment-name, namespace: test-namespace}:
     maxPVCSize: 15Gi
     maxMemLimit: 5Gi
-    maxCPULimit: 2
+    maxCPULimit: 3
+    maxCPURequest: 2
+    maxMemRequest: 3Gi
+
