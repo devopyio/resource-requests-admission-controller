@@ -6,11 +6,9 @@
 
 This application provides a global limit for Pod resources.
 
-You can specify a `config.yaml` with max CPU, Memory or PVC limit and all resources exceeding the limit will be rejected.
+You can specify a `config.yaml` with max CPU Limits, CPU Requests, Memory Limits, Memory Requests or PVC limit and all resources exceeding the limit will be rejected.
 
-Note that once you use it with Deployments, users must specify resource requests to `0` and resource limits to value up to `maxCPULimit` or `maxMemLimit`. Otherwise you will get a validation error.
-
-Also this allows a custom config per namespace.
+A custom config per namespace is also possible.
 
 Here is an example config:
 ```
@@ -28,10 +26,11 @@ data:
     maxMemRequest: 2Gi
     customNamespaces:
       kube-system:
-        # maxMemLimit and maxPVCSize is taken from top level declaration
+        # maxMemLimit, maxPVCSize, maxMemRequest is taken from top level declaration
         maxCPULimit: 1
+        maxCPURequest: 500Mi
       monitoring:
-        # maxCPULimit and maxPVCSize is taken from top level declaration
+        # maxCPULimit, maxPVCSize, maxMemRequest, maxCPURequest is taken from top level declaration
         maxMemLimit: 1Gi
       default:
         # everything is unlimited.
@@ -41,12 +40,16 @@ data:
         unlimited: false
         maxCPULimit: 1
         maxMemLimit: 1Gi
+        maxCPURequest: 500Mi
+        maxMemRequest: 1Gi
         maxPVCSize: 10Gi
     customNames:
       {name: deployment-name, namespace: test-namespace}:
         maxPVCSize: 15Gi
         maxMemLimit: 5Gi
         maxCPULimit: 2
+        maxCPURequest: 500Mi
+        maxMemRequest: 1Gi
 ```
 
 # Deployment
