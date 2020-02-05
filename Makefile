@@ -12,7 +12,7 @@ GO111MODULE := on
 all: $(LINTER) deps test lint build
 
 $(LINTER):
-	curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh| sh -s v1.15.0
+	curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh| sh -s v1.23.3
 
 .PHONY: lint
 lint: $(LINTER)
