@@ -32,27 +32,33 @@ func (nn NameNamespace) String() string {
 
 // Limit describes limit configuration in yaml
 type Limit struct {
-	CPULimit  string `yaml:"maxCPULimit" json:"maxCPULimit"`
-	MemLimit  string `yaml:"maxMemLimit" json:"maxMemLimit"`
-	PVCSize   string `yaml:"maxPVCSize" json:"maxPVCSize"`
-	Unlimited bool   `yaml:"unlimited" json:"unlimited"`
+	CPULimit   string `yaml:"maxCPULimit" json:"maxCPULimit"`
+	MemLimit   string `yaml:"maxMemLimit" json:"maxMemLimit"`
+	CPURequest string `yaml:"maxCPURequest" json:"maxCPURequest"`
+	MemRequest string `yaml:"maxMemRequest" json:"maxMemRequest"`
+	PVCSize    string `yaml:"maxPVCSize" json:"maxPVCSize"`
+	Unlimited  bool   `yaml:"unlimited" json:"unlimited"`
 }
 
 // Config describes Config files structure
 type Config struct {
-	Namespaces  map[string]Limit        `yaml:"customNamespaces" json:"namespaces"`
-	Names       map[NameNamespace]Limit `yaml:"customNames" json:"names"`
-	MaxCPULimit string                  `yaml:"maxCPULimit" json:"maxCPULimit"`
-	MaxMemLimit string                  `yaml:"maxMemLimit" json:"maxMemLimit"`
-	MaxPvcSize  string                  `yaml:"maxPVCSize" json:"maxPVCSize"`
+	Namespaces    map[string]Limit        `yaml:"customNamespaces" json:"namespaces"`
+	Names         map[NameNamespace]Limit `yaml:"customNames" json:"names"`
+	MaxCPULimit   string                  `yaml:"maxCPULimit" json:"maxCPULimit"`
+	MaxMemLimit   string                  `yaml:"maxMemLimit" json:"maxMemLimit"`
+	MaxCPURequest string                  `yaml:"maxCPURequest" json:"maxCPURequest"`
+	MaxMemRequest string                  `yaml:"maxMemRequest" json:"maxMemRequest"`
+	MaxPvcSize    string                  `yaml:"maxPVCSize" json:"maxPVCSize"`
 }
 
 // LimitResource resource limits
 type LimitResource struct {
-	CPULimit  *resource.Quantity
-	MemLimit  *resource.Quantity
-	PVCSize   *resource.Quantity
-	Unlimited bool
+	CPULimit   *resource.Quantity
+	MemLimit   *resource.Quantity
+	CPURequest *resource.Quantity
+	MemRequest *resource.Quantity
+	PVCSize    *resource.Quantity
+	Unlimited  bool
 }
 
 // Configurer configures resource limits
@@ -65,6 +71,8 @@ type Configurer struct {
 	excludedNamespaces map[string]LimitResource
 	maxCPULimit        *resource.Quantity
 	maxMemLimit        *resource.Quantity
+	maxCPURequest      *resource.Quantity
+	maxMemRequest      *resource.Quantity
 	maxPvcSize         *resource.Quantity
 	m                  sync.RWMutex
 }
@@ -97,7 +105,7 @@ func NewConfigurer(filePath string, refreshInterval time.Duration) (*Configurer,
 }
 
 func (c *Configurer) convertLimitsToResources(limit Limit) (*LimitResource, error) {
-	var cpu, mem, pvc *resource.Quantity
+	var cpu, mem, cpuRequest, memRequest, pvc *resource.Quantity
 	switch {
 	case limit.CPULimit != "":
 		q, err := resource.ParseQuantity(limit.CPULimit)
@@ -124,6 +132,31 @@ func (c *Configurer) convertLimitsToResources(limit Limit) (*LimitResource, erro
 	}
 
 	switch {
+	case limit.CPURequest != "":
+		q, err := resource.ParseQuantity(limit.CPURequest)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not parse CPURequest")
+		}
+		cpuRequest = &q
+	case c.maxCPURequest != nil:
+		q := c.maxCPURequest.DeepCopy()
+		cpuRequest = &q
+	}
+
+	switch {
+	case limit.MemRequest != "":
+		q, err := resource.ParseQuantity(limit.MemRequest)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not parse MemLimit")
+		}
+
+		memRequest = &q
+	case c.maxMemRequest != nil:
+		q := c.maxMemRequest.DeepCopy()
+		memRequest = &q
+	}
+
+	switch {
 	case limit.PVCSize != "":
 		q, err := resource.ParseQuantity(limit.PVCSize)
 		if err != nil {
@@ -136,10 +169,12 @@ func (c *Configurer) convertLimitsToResources(limit Limit) (*LimitResource, erro
 	}
 
 	return &LimitResource{
-		CPULimit:  cpu,
-		MemLimit:  mem,
-		PVCSize:   pvc,
-		Unlimited: limit.Unlimited,
+		CPULimit:   cpu,
+		MemLimit:   mem,
+		CPURequest: cpuRequest,
+		MemRequest: memRequest,
+		PVCSize:    pvc,
+		Unlimited:  limit.Unlimited,
 	}, nil
 }
 
@@ -174,6 +209,23 @@ func (c *Configurer) load() error {
 
 		c.maxMemLimit = &q
 	}
+	if config.MaxCPURequest != "" {
+		q, err := resource.ParseQuantity(config.MaxCPURequest)
+		if err != nil {
+			return errors.Wrap(err, "could not parse MaxCPURequest")
+		}
+		c.maxCPURequest = &q
+	}
+
+	if config.MaxMemRequest != "" {
+		q, err := resource.ParseQuantity(config.MaxMemRequest)
+		if err != nil {
+			return errors.Wrap(err, "could not parse MaxMemRequest")
+		}
+
+		c.maxMemRequest = &q
+	}
+
 	if config.MaxPvcSize != "" {
 		q, err := resource.ParseQuantity(config.MaxPvcSize)
 		if err != nil {
@@ -208,52 +260,83 @@ func (c *Configurer) load() error {
 }
 
 // GetPodLimit gets pod CPU and memory limit from configmap.
-func (c *Configurer) GetPodLimit(nn NameNamespace) (cpu, mem *resource.Quantity, unlimited bool) {
+func (c *Configurer) GetPodLimit(nn NameNamespace) (cpuLimit, memLimit, cpuRequest, memRequest *resource.Quantity, unlimited bool) {
 	c.m.RLock()
 	defer c.m.RUnlock()
 
+	if limit, ok := c.excludedNamespaces[nn.Namespace]; ok {
+		if limit.Unlimited {
+			return nil, nil, nil, nil, true
+		}
+	}
+
 	if limit, ok := c.excludedNames[nn]; ok {
 		if limit.Unlimited {
-			return nil, nil, true
+			return nil, nil, nil, nil, true
 		}
 
 		if limit.CPULimit != nil {
 			q := limit.CPULimit.DeepCopy()
-			cpu = &q
+			cpuLimit = &q
 		}
 		if limit.MemLimit != nil {
 			q := limit.MemLimit.DeepCopy()
-			mem = &q
+			memLimit = &q
 		}
-		return cpu, mem, false
+		if limit.CPURequest != nil {
+			q := limit.CPURequest.DeepCopy()
+			cpuRequest = &q
+		}
+
+		if limit.MemRequest != nil {
+			q := limit.MemRequest.DeepCopy()
+			memRequest = &q
+		}
+
+		return cpuLimit, memLimit, cpuRequest, memRequest, false
 	}
 
 	if limit, ok := c.excludedNamespaces[nn.Namespace]; ok {
-		if limit.Unlimited {
-			return nil, nil, true
-		}
-
 		if limit.CPULimit != nil {
 			q := limit.CPULimit.DeepCopy()
-			cpu = &q
+			cpuLimit = &q
 		}
 
 		if limit.MemLimit != nil {
 			q := limit.MemLimit.DeepCopy()
-			mem = &q
+			memLimit = &q
 		}
-		return cpu, mem, false
+		if limit.CPURequest != nil {
+			q := limit.CPURequest.DeepCopy()
+			cpuRequest = &q
+		}
+
+		if limit.MemRequest != nil {
+			q := limit.MemRequest.DeepCopy()
+			memRequest = &q
+		}
+
+		return cpuLimit, memLimit, cpuRequest, memRequest, false
 	}
+
 	if c.maxCPULimit != nil {
 		q := c.maxCPULimit.DeepCopy()
-		cpu = &q
+		cpuLimit = &q
 	}
 	if c.maxMemLimit != nil {
 		q := c.maxMemLimit.DeepCopy()
-		mem = &q
+		memLimit = &q
+	}
+	if c.maxCPURequest != nil {
+		q := c.maxCPURequest.DeepCopy()
+		cpuRequest = &q
+	}
+	if c.maxMemRequest != nil {
+		q := c.maxMemRequest.DeepCopy()
+		memRequest = &q
 	}
 
-	return cpu, mem, false
+	return cpuLimit, memLimit, cpuRequest, memRequest, false
 }
 
 // GetMaxPVCSize returns PVC limit, might return nil if both maxPvcSize and custom pvc size is not set

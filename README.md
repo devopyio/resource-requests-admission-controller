@@ -24,6 +24,8 @@ data:
     maxCPULimit: 2
     maxMemLimit: 2Gi
     maxPVCSize: 50Gi
+    maxCPURequest: 1
+    maxMemRequest: 2Gi
     customNamespaces:
       kube-system:
         # maxMemLimit and maxPVCSize is taken from top level declaration

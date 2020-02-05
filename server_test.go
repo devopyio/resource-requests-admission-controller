@@ -65,8 +65,8 @@ var (
                   "memory":2
                },
 			   "requests": {
-			      "cpu":0,
-				  "memory":0
+			      "cpu":1,
+				  "memory":1
 			   }
             }
          }
@@ -120,6 +120,60 @@ func TestServeReturnsCorrectJson(t *testing.T) {
 	assert.Equal(t, review.Response.Allowed, true)
 }
 
+func TestServePodUnderRestrictionsReturnsCorrectJson(t *testing.T) {
+	cpu := resource.MustParse("3")
+	mem := resource.MustParse("3Gi")
+	conf := &MockConfiger{
+		cpu:        &cpu,
+		mem:        &mem,
+		cpuRequest: &cpu,
+		memRequest: &mem,
+	}
+	rra := &ResourceRequestsAdmission{conf}
+	server := httptest.NewServer(&AdmissionControllerServer{
+		AdmissionController: rra,
+		Decoder:             codecs.UniversalDeserializer(),
+	})
+
+	requestString := string(encodeRequest(t, &AdmissionRequestPodDisallow))
+	myr := strings.NewReader(requestString)
+	r, err := http.Post(server.URL, "application/json", myr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	review := decodeResponse(t, r.Body)
+
+	assert.Equal(t, review.Request.UID, AdmissionRequestPod.Request.UID)
+	assert.Equal(t, true, review.Response.Allowed)
+}
+
+func TestServePodOverRequestReturnsCorrectJson(t *testing.T) {
+	cpu := resource.MustParse("0.5")
+	mem := resource.MustParse("500Mi")
+	conf := &MockConfiger{
+		cpuRequest: &cpu,
+		memRequest: &mem,
+	}
+	rra := &ResourceRequestsAdmission{conf}
+	server := httptest.NewServer(&AdmissionControllerServer{
+		AdmissionController: rra,
+		Decoder:             codecs.UniversalDeserializer(),
+	})
+
+	requestString := string(encodeRequest(t, &AdmissionRequestPodDisallow))
+	myr := strings.NewReader(requestString)
+	r, err := http.Post(server.URL, "application/json", myr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	review := decodeResponse(t, r.Body)
+
+	assert.Equal(t, review.Request.UID, AdmissionRequestPod.Request.UID)
+	assert.Equal(t, false, review.Response.Allowed)
+}
+
 func TestServePodOverLimitReturnsCorrectJson(t *testing.T) {
 	cpu := resource.MustParse("1")
 	mem := resource.MustParse("1Gi")
@@ -170,14 +224,16 @@ func TestServePodUnlimitedReturnsCorrectJson(t *testing.T) {
 }
 
 type MockConfiger struct {
-	cpu       *resource.Quantity
-	mem       *resource.Quantity
-	pvcSize   *resource.Quantity
-	unlimited bool
+	cpu        *resource.Quantity
+	mem        *resource.Quantity
+	cpuRequest *resource.Quantity
+	memRequest *resource.Quantity
+	pvcSize    *resource.Quantity
+	unlimited  bool
 }
 
-func (mc *MockConfiger) GetPodLimit(nn NameNamespace) (cpu, mem *resource.Quantity, unlimited bool) {
-	return mc.cpu, mc.mem, mc.unlimited
+func (mc *MockConfiger) GetPodLimit(nn NameNamespace) (cpu, mem, cpuRequest, memRequest *resource.Quantity, unlimited bool) {
+	return mc.cpu, mc.mem, mc.cpuRequest, mc.memRequest, mc.unlimited
 }
 
 func (mc *MockConfiger) GetMaxPVCSize(nn NameNamespace) (pvc *resource.Quantity, unlimited bool) {

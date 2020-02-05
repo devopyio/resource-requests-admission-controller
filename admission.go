@@ -56,7 +56,7 @@ const (
 
 // Conf get configuration intercace
 type Conf interface {
-	GetPodLimit(nn NameNamespace) (cpu, mem *resource.Quantity, unlimited bool)
+	GetPodLimit(nn NameNamespace) (cpuLimit, memLimit, cpuRequest, memRequest *resource.Quantity, unlimited bool)
 	GetMaxPVCSize(nn NameNamespace) (pvc *resource.Quantity, unlimited bool)
 }
 
@@ -121,7 +121,7 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			}
 		}
 
-		cpu, mem, unlimited := rra.conf.GetPodLimit(NameNamespace{
+		cpuLimit, memLimit, cpuRequest, memRequest, unlimited := rra.conf.GetPodLimit(NameNamespace{
 			Name:      name,
 			Namespace: req.Namespace,
 		})
@@ -129,7 +129,7 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			return resp, nil
 		}
 
-		if denyResp := rra.validatePodSpec(req, pod.Spec, cpu, mem); denyResp != nil {
+		if denyResp := rra.validatePodSpec(req, pod.Spec, cpuLimit, memLimit, cpuRequest, memRequest); denyResp != nil {
 			log.Infof("denying request for pod name: %s, namespace: %s, userInfo: %v", name, req.Namespace, req.UserInfo)
 			return denyResp, nil
 		}
@@ -141,7 +141,7 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
 		}
 
-		cpu, mem, unlimited := rra.conf.GetPodLimit(NameNamespace{
+		cpuLimit, memLimit, cpuRequest, memRequest, unlimited := rra.conf.GetPodLimit(NameNamespace{
 			Name:      deployment.Name,
 			Namespace: req.Namespace,
 		})
@@ -149,7 +149,7 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			return resp, nil
 		}
 
-		if denyResp := rra.validatePodSpec(req, deployment.Spec.Template.Spec, cpu, mem); denyResp != nil {
+		if denyResp := rra.validatePodSpec(req, deployment.Spec.Template.Spec, cpuLimit, memLimit, cpuRequest, memRequest); denyResp != nil {
 			log.Infof("denying request for deployment name: %s, namespace: %s, userInfo: %v", deployment.Name, req.Namespace, req.UserInfo)
 			return denyResp, nil
 		}
@@ -161,7 +161,7 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
 		}
 
-		cpu, mem, unlimited := rra.conf.GetPodLimit(NameNamespace{
+		cpuLimit, memLimit, cpuRequest, memRequest, unlimited := rra.conf.GetPodLimit(NameNamespace{
 			Name:      sts.Name,
 			Namespace: req.Namespace,
 		})
@@ -169,7 +169,7 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			return resp, nil
 		}
 
-		if denyResp := rra.validatePodSpec(req, sts.Spec.Template.Spec, cpu, mem); denyResp != nil {
+		if denyResp := rra.validatePodSpec(req, sts.Spec.Template.Spec, cpuLimit, memLimit, cpuRequest, memRequest); denyResp != nil {
 			log.Infof("denying request for statefulset name: %s, namespace: %s, userInfo: %v", sts.Name, req.Namespace, req.UserInfo)
 			return denyResp, nil
 		}
@@ -181,7 +181,7 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
 		}
 
-		cpu, mem, unlimited := rra.conf.GetPodLimit(NameNamespace{
+		cpuLimit, memLimit, cpuRequest, memRequest, unlimited := rra.conf.GetPodLimit(NameNamespace{
 			Name:      ds.Name,
 			Namespace: req.Namespace,
 		})
@@ -189,7 +189,7 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			return resp, nil
 		}
 
-		if denyResp := rra.validatePodSpec(req, ds.Spec.Template.Spec, cpu, mem); denyResp != nil {
+		if denyResp := rra.validatePodSpec(req, ds.Spec.Template.Spec, cpuLimit, memLimit, cpuRequest, memRequest); denyResp != nil {
 			log.Infof("denying request for daemonset name: %s, namespace: %s, userInfo: %v", ds.Name, req.Namespace, req.UserInfo)
 			return denyResp, nil
 		}
@@ -201,7 +201,7 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
 		}
 
-		cpu, mem, unlimited := rra.conf.GetPodLimit(NameNamespace{
+		cpuLimit, memLimit, cpuRequest, memRequest, unlimited := rra.conf.GetPodLimit(NameNamespace{
 			Name:      cj.Name,
 			Namespace: req.Namespace,
 		})
@@ -209,7 +209,7 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			return resp, nil
 		}
 
-		if denyResp := rra.validatePodSpec(req, cj.Spec.JobTemplate.Spec.Template.Spec, cpu, mem); denyResp != nil {
+		if denyResp := rra.validatePodSpec(req, cj.Spec.JobTemplate.Spec.Template.Spec, cpuLimit, memLimit, cpuRequest, memRequest); denyResp != nil {
 			log.Infof("denying request for daemonset name: %s, namespace: %s, userInfo: %v", cj.Name, req.Namespace, req.UserInfo)
 			return denyResp, nil
 		}
@@ -221,7 +221,7 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
 		}
 
-		cpu, mem, unlimited := rra.conf.GetPodLimit(NameNamespace{
+		cpuLimit, memLimit, cpuRequest, memRequest, unlimited := rra.conf.GetPodLimit(NameNamespace{
 			Name:      j.Name,
 			Namespace: req.Namespace,
 		})
@@ -229,7 +229,7 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			return resp, nil
 		}
 
-		if denyResp := rra.validatePodSpec(req, j.Spec.Template.Spec, cpu, mem); denyResp != nil {
+		if denyResp := rra.validatePodSpec(req, j.Spec.Template.Spec, cpuLimit, memLimit, cpuRequest, memRequest); denyResp != nil {
 			log.Infof("denying request for daemonset name: %s, namespace: %s, userInfo: %v", j.Name, req.Namespace, req.UserInfo)
 			return denyResp, nil
 		}
@@ -276,7 +276,7 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 	return resp, nil
 }
 
-func (rra *ResourceRequestsAdmission) validatePodSpec(req *v1beta1.AdmissionRequest, podSpec corev1.PodSpec, cpuLimit, memLimit *resource.Quantity) *v1beta1.AdmissionResponse {
+func (rra *ResourceRequestsAdmission) validatePodSpec(req *v1beta1.AdmissionRequest, podSpec corev1.PodSpec, cpuLimit, memLimit, cpuRequest, memRequest *resource.Quantity) *v1beta1.AdmissionResponse {
 	for _, container := range podSpec.Containers {
 		if _, ok := container.Resources.Requests[corev1.ResourceCPU]; !ok {
 			return &v1beta1.AdmissionResponse{
@@ -297,22 +297,22 @@ func (rra *ResourceRequestsAdmission) validatePodSpec(req *v1beta1.AdmissionRequ
 			}
 		}
 
-		if container.Resources.Requests.Cpu().CmpInt64(0) > 0 {
+		if cpuRequest != nil && container.Resources.Requests.Cpu().Cmp(*cpuRequest) > 0 {
 			return &v1beta1.AdmissionResponse{
 				UID:     req.UID,
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: fmt.Sprintf("error container %s requests.CPU: %s > 0", container.Name, container.Resources.Requests.Cpu()),
+					Message: fmt.Sprintf("error container %s requests.CPU: %s > %s", container.Name, container.Resources.Requests.Cpu(), cpuRequest),
 				},
 			}
 		}
 
-		if container.Resources.Requests.Memory().CmpInt64(0) > 0 {
+		if memRequest != nil && container.Resources.Requests.Memory().Cmp(*memRequest) > 0 {
 			return &v1beta1.AdmissionResponse{
 				UID:     req.UID,
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: fmt.Sprintf("error container %s requests.Memory: %s > 0", container.Name, container.Resources.Requests.Memory()),
+					Message: fmt.Sprintf("error container %s requests.Memory: %s > %s", container.Name, container.Resources.Requests.Memory(), memRequest),
 				},
 			}
 		}

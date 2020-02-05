@@ -41,8 +41,8 @@ var req = v1beta1.AdmissionReview{
 	},
 }
 
-// NewHealhChecker creates New Healthchecker
-func NewHealhChecker(port string) (*Healthchecker, error) {
+// NewHealthChecker creates New Healthchecker
+func NewHealthChecker(port string) (*Healthchecker, error) {
 	defaultTransport := http.DefaultTransport.(*http.Transport)
 
 	// Create new Transport that ignores self-signed SSL
