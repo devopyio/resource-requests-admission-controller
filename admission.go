@@ -221,10 +221,27 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			return nil, errors.Wrapf(err, "unable to unmarshal json: %s", string(req.Object.Raw))
 		}
 
-		cpuLimit, memLimit, cpuRequest, memRequest, unlimited := rra.conf.GetPodLimit(NameNamespace{
-			Name:      j.Name,
-			Namespace: req.Namespace,
-		})
+		var cpuLimit, memLimit, cpuRequest, memRequest *resource.Quantity
+		var unlimited bool
+
+		// find cronjob limits
+		for _, owner := range j.OwnerReferences {
+			if owner.Kind == cronJobKind {
+				cpuLimit, memLimit, cpuRequest, memRequest, unlimited = rra.conf.GetPodLimit(NameNamespace{
+					Name:      owner.Name,
+					Namespace: req.Namespace,
+				})
+			}
+		}
+
+		// fallback to pod spec
+		if cpuLimit == nil || memLimit == nil || cpuRequest == nil || memRequest == nil {
+			cpuLimit, memLimit, cpuRequest, memRequest, unlimited = rra.conf.GetPodLimit(NameNamespace{
+				Name:      j.Name,
+				Namespace: req.Namespace,
+			})
+		}
+
 		if unlimited {
 			return resp, nil
 		}
