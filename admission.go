@@ -121,6 +121,12 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 			}
 		}
 
+		for _, owner := range pod.OwnerReferences {
+			if owner.Kind == jobKind {
+				return resp, nil
+			}
+		}
+
 		cpuLimit, memLimit, cpuRequest, memRequest, unlimited := rra.conf.GetPodLimit(NameNamespace{
 			Name:      name,
 			Namespace: req.Namespace,
