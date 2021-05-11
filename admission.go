@@ -227,10 +227,13 @@ func (rra *ResourceRequestsAdmission) handleAdmission(req *v1beta1.AdmissionRequ
 		// find cronjob limits
 		for _, owner := range j.OwnerReferences {
 			if owner.Kind == cronJobKind {
-				cpuLimit, memLimit, cpuRequest, memRequest, unlimited = rra.conf.GetPodLimit(NameNamespace{
-					Name:      owner.Name,
-					Namespace: req.Namespace,
-				})
+				return resp, nil
+				/*
+					cpuLimit, memLimit, cpuRequest, memRequest, unlimited = rra.conf.GetPodLimit(NameNamespace{
+						Name:      owner.Name,
+						Namespace: req.Namespace,
+					})
+				*/
 			}
 		}
 
